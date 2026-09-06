@@ -39,6 +39,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
     NSString *text = request[@"text"];
     NSString *balloonBundleId = request[@"balloonBundleId"];
     NSString *payloadBase64 = request[@"payloadDataBase64"];
+    NSString *senderHandle = request[@"senderHandle"];
 
     NSData *payloadData = [payloadBase64 isKindOfClass:[NSString class]] && payloadBase64.length > 0
         ? [[NSData alloc] initWithBase64EncodedString:payloadBase64 options:0]
@@ -56,7 +57,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
 
         NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
 
-        IMMessage *message = [[IMMessage alloc] initWithSender:nil
+        IMMessage *message = [[IMMessage alloc] initWithSender:([senderHandle isKindOfClass:[NSString class]] && senderHandle.length > 0 ? senderHandle : nil)
                                                             time:nil
                                                             text:attributedText
                                                   messageSubject:nil
