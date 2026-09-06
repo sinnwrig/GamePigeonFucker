@@ -95,3 +95,103 @@ reversed), percent-escape the result, and wrap as
 `data:?ver=52&data=<encrypted>` inside the NSKeyedArchiver plist matching a
 real GamePigeon message's structure (see `OpenPigeon`'s `MadridMessage`/
 `Game.buildGameMessage` for the exact envelope).
+
+## What's in this project
+
+This project (`GamePigeonProtocol.csproj`, project-references
+`../IMessageInterceptor`) implements the above as C# types, independent of
+any transport:
+
+- `NSKeyedArchiveDecoder`/`NSKeyedArchiveEncoder` -- generic binary plist
+  NSKeyedArchiver reader/writer (`Plist/BinaryPropertyListReader.cs`,
+  `Plist/BinaryPropertyListWriter.cs` do the underlying bplist format).
+- `GamePigeonQueryCodec` -- the shuffle/unshuffle (`Rand48`) plus
+  `data:?ver=...&data=...` URL encode/decode and query-string parsing.
+- `GamePigeonCipher` -- lower-level shuffle primitives used by the codec.
+- `GamePigeonEnvelope` (record) -- decoded message shape:
+  `GameName` (`ldtext`), `UserInfo` (dict, includes `caption`),
+  `SessionId`, `AppName`, `AppId`, `Thumbnail`, `DecodedQuery` (the raw
+  unshuffled query string), `Fields` (query string parsed into a dict).
+- `GamePigeonEnvelopeCodec.Decode(byte[])` / `.Encode(GamePigeonEnvelope)`
+  -- converts between an `InboundMessage.PayloadData`/
+  `OutboundMessage.RawPayload` byte array and a `GamePigeonEnvelope`.
+- `Games/` -- one parser per game (`ConnectFourGame`, `AnagramsGame`,
+  `WordHuntGame`, `CupPongGame`, `MancalaGame`, `WordBitesGame`,
+  `FillerGame`, `ArcheryGame`, `KnockoutGame`, `MiniGolfGame`,
+  `DotsAndBoxesGame`), each an `IGamePigeonGameParser<TState>`
+  (`GameKey`, `Parse(envelope) -> TState`, `ToFields(state) -> fields`)
+  registered by key (`envelope.Fields["game"]`, e.g. `"connect"`) in
+  `GamePigeonGameRegistry.CreateDefault()`. Add a new game by writing a
+  parser and calling `.Register(new YourGame())`.
+- `GamePigeonDispatcher` -- wraps a registry: `OnGame<TState>(handler)`
+  registers a typed callback, `Dispatch(InboundMessage)` decodes the
+  envelope, parses it via the registry, and invokes every handler
+  registered for that state's type.
+
+## Wiring into IMessageInterceptor
+
+`GamePigeonMessagingExtensions.cs` is the glue layer between this project
+and `IMessageInterceptor` (see `../IMessageInterceptor/README.md` for
+`MessagingService`/`InboundMessage`/`OutboundMessage`):
+
+- `InboundMessage.IsGamePigeon()` -- true if `BalloonBundleId` contains
+  `"gamepigeon"`.
+- `InboundMessage.TryDecodeGamePigeon(out GamePigeonEnvelope envelope)` --
+  true if it's a GamePigeon message with a non-empty `PayloadData`, decoded
+  via `GamePigeonEnvelopeCodec.Decode`.
+- `MessagingService.SendGamePigeonMessageAsync(chatIdentifier, envelope, fallbackText?)`
+  -- encodes the envelope and sends it as an `OutboundMessage` with the
+  GamePigeon balloon bundle ID already filled in.
+
+End-to-end pattern, receiving and reacting to a game move (see
+`../Program.cs` for the full reference host):
+
+```csharp
+using IMessage;
+using GamePigeon;
+using GamePigeon.Games;
+
+var service = new MessagingService(new ChatDatabaseTransport());
+var dispatcher = new GamePigeonDispatcher(); // GamePigeonGameRegistry.CreateDefault() by default
+
+dispatcher.OnGame<ConnectFourState>((state, message) =>
+{
+    Console.WriteLine($"board={string.Join(',', state.Board!)} lastMove={state.LastMove}");
+});
+
+service.OnReceiveMessage += message =>
+{
+    if (message.TryDecodeGamePigeon(out var envelope))
+    {
+        Console.WriteLine($"game={envelope.GameName} caption={envelope.UserInfo.GetValueOrDefault("caption")}");
+    }
+
+    dispatcher.Dispatch(message); // decodes + parses + invokes OnGame<T> handlers
+};
+
+await service.StartAsync(cancellationToken);
+```
+
+To reply with a move, build the state record for the game you're replying
+to (fill in `RawFields` from the inbound state so unrelated fields like
+`sender`/`player1`/`player2` round-trip), turn it into a
+`GamePigeonEnvelope`, and send it:
+
+```csharp
+var replyFields = new ConnectFourGame().ToFields(newState);
+var envelope = new GamePigeonEnvelope(
+    GameName: "Four in a Row",
+    UserInfo: new Dictionary<string, string> { ["caption"] = "Four in a Row" },
+    SessionId: Guid.NewGuid(),
+    AppName: null,
+    AppId: null,
+    Thumbnail: null,
+    DecodedQuery: "?" + string.Join('&', replyFields.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}")),
+    Fields: replyFields);
+
+await service.SendGamePigeonMessageAsync(chatIdentifier, envelope);
+```
+
+`GamePigeonEnvelopeCodec.Encode` handles re-shuffling `DecodedQuery` and
+rebuilding the NSKeyedArchiver plist -- `MessagesInjector` and `chat.db`
+never see anything but the final opaque payload bytes.
