@@ -15,7 +15,7 @@ static NSString *const kSocketPath = @"/tmp/gamepigeonfucker-injector.sock";
                  messageSubject:(id)subject
               fileTransferGUIDs:(id)guids
                           flags:(unsigned long long)flags
-                          error:(NSError **)error
+                          error:(id)error
                            guid:(NSString *)guid
                         subject:(id)subject2
                 balloonBundleID:(NSString *)balloonBundleID
@@ -50,14 +50,13 @@ static NSDictionary *HandleRequest(NSDictionary *request)
         return @{ @"ok": @NO, @"error": @"chat not found" };
     }
 
-    NSError *error = nil;
     IMMessage *message = [[IMMessage alloc] initWithSender:nil
                                                         time:nil
                                                         text:text
                                               messageSubject:nil
                                            fileTransferGUIDs:nil
                                                        flags:100005
-                                                       error:&error
+                                                       error:nil
                                                         guid:nil
                                                      subject:nil
                                              balloonBundleID:[balloonBundleId isKindOfClass:[NSString class]] && balloonBundleId.length > 0 ? balloonBundleId : nil
@@ -66,7 +65,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
                                             threadIdentifier:nil];
     if (!message)
     {
-        return @{ @"ok": @NO, @"error": error.localizedDescription ?: @"failed to build message" };
+        return @{ @"ok": @NO, @"error": @"failed to build message" };
     }
 
     [chat sendMessage:message];
