@@ -13,9 +13,16 @@ either.
 
 It runs inside a patched copy of the real `Messages.app`, not a standalone
 binary - so it shares the Mac's real `~/Library/Messages` state, Keychain
-identity, and iMessage account registration. No SIP, SSV, or FileVault
-changes are required, and `/System` is never modified; everything happens
-on a writable copy of the app made from a clean snapshot.
+identity, and iMessage account registration. Building/patching the copy
+never touches `/System` and doesn't require SIP, SSV, or FileVault changes
+(see below) - but SIP must be **disabled** to actually launch the patched
+app. It's ad-hoc signed and claims Apple's own `com.apple.MobileSMS`
+bundle identifier while carrying an injected dylib; with SIP enabled,
+`spctl`/RunningBoard rejects it and `open`/`launchd` fails with
+`RBSRequestErrorDomain Code=5` (`Launchd job spawn failed`,
+`NSPOSIXErrorDomain Code=163`). Confirmed by re-enabling SIP (and SSV) on
+a testbench Mac: `dotnet` then worked fine, but `Messages-patched.app`
+immediately failed to launch again until SIP was turned back off.
 
 ## API
 
@@ -124,9 +131,15 @@ private API shapes change between OS releases. Not needed for normal use.
 
 ## Installation on machine
 
-None of this requires disabling SIP, SSV, or FileVault, and it never
-touches `/System`. Everything happens on a writable copy of the app you
-make yourself.
+Building the patched copy (steps below) never touches `/System` and
+doesn't require disabling SIP, SSV, or FileVault - everything happens on
+a writable copy of the app you make yourself. **Launching the result
+does** - SIP must be disabled first, or `open Messages-patched.app` /
+`sideload.sh` fails with `RBSRequestErrorDomain Code=5` because the
+ad-hoc-signed, dylib-injected app is impersonating a system bundle
+identifier (`com.apple.MobileSMS`) that Gatekeeper/RunningBoard rejects
+once SIP is enforcing normally. SSV and FileVault do not need to be
+disabled for either step.
 
 **Prerequisites:**
 - Xcode Command Line Tools (`xcode-select --install`) for `clang` and
