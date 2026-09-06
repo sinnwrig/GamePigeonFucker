@@ -40,9 +40,22 @@ internal sealed class ChatDatabaseTransport : IMessageTransport
 
     public Task SendAsync(string chatIdentifier, OutboundMessage message)
     {
+        if (message.SenderAccountUniqueId is { Length: > 0 } accountUniqueId)
+        {
+            if (message.RawPayload is not null || message.BalloonBundleId is not null)
+            {
+                throw new NotSupportedException(
+                    "sendViaAccount only supports plain text - balloon/payload sends must go through the default account");
+            }
+
+            return _injector.SendViaAccountAsync(accountUniqueId, chatIdentifier, message.Text, message.SenderIdentityId);
+        }
+
         var chatGuid = BuildChatGuid(chatIdentifier);
         return _injector.SendAsync(chatGuid, message.Text, message.BalloonBundleId, message.RawPayload);
     }
+
+    public Task<IReadOnlyList<ImAccountInfo>> ListAccountsAsync() => _injector.ListAccountsAsync();
 
     private static async Task<long> GetMaxRowIdAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {

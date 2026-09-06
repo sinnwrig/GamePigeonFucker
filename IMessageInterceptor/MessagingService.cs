@@ -16,4 +16,7 @@ public sealed class MessagingService
 
     public Task SendMessageAsync(string chatIdentifier, OutboundMessage message) =>
         _transport.SendAsync(chatIdentifier, message);
+
+    public Task<IReadOnlyList<ImAccountInfo>> ListAccountsAsync() =>
+        _transport.ListAccountsAsync();
 }
