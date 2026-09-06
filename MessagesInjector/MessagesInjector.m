@@ -11,7 +11,7 @@ static NSString *const kSocketPath = @"/tmp/gamepigeonfucker-injector.sock";
 @interface IMMessage : NSObject
 - (instancetype)initWithSender:(id)sender
                            time:(id)time
-                           text:(NSString *)text
+                           text:(NSAttributedString *)text
                  messageSubject:(id)subject
               fileTransferGUIDs:(id)guids
                           flags:(unsigned long long)flags
@@ -50,9 +50,11 @@ static NSDictionary *HandleRequest(NSDictionary *request)
         return @{ @"ok": @NO, @"error": @"chat not found" };
     }
 
+    NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
+
     IMMessage *message = [[IMMessage alloc] initWithSender:nil
                                                         time:nil
-                                                        text:text
+                                                        text:attributedText
                                               messageSubject:nil
                                            fileTransferGUIDs:nil
                                                        flags:100005
