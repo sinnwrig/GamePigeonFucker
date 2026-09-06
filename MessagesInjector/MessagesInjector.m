@@ -9,6 +9,9 @@
 
 static NSString *const kSocketPath = @"/tmp/gamepigeonfucker-injector.sock";
 
+static pthread_mutex_t gSubscriberLock = PTHREAD_MUTEX_INITIALIZER;
+static NSMutableArray<NSNumber *> *gSubscriberFds;
+
 @interface IMMessage : NSObject
 - (instancetype)initWithSender:(id)sender
                            time:(id)time
@@ -100,7 +103,20 @@ static NSDictionary *HandleIntrospect(void)
     }
     free(methods3);
 
-    return @{ @"ok": @YES, @"IMChatRegistry_chatForHandle": names, @"IMAccount_handle_methods": acctNames, @"IMChat_lastAddressed_methods": chatNames };
+    Class messageClass = NSClassFromString(@"IMMessage");
+    unsigned int count4 = 0;
+    Method *methods4 = class_copyMethodList(messageClass, &count4);
+    NSMutableArray *messageNames = [NSMutableArray array];
+    for (unsigned int i = 0; i < count4; i++) {
+        NSString *name = NSStringFromSelector(method_getName(methods4[i]));
+        if ([name hasPrefix:@"_"] || [name hasPrefix:@"init"] || [name hasPrefix:@"set"]) {
+            continue;
+        }
+        [messageNames addObject:name];
+    }
+    free(methods4);
+
+    return @{ @"ok": @YES, @"IMChatRegistry_chatForHandle": names, @"IMAccount_handle_methods": acctNames, @"IMChat_lastAddressed_methods": chatNames, @"IMMessage_methods": messageNames };
 }
 
 static NSDictionary *HandleSendViaAccount(NSDictionary *request)
@@ -306,6 +322,47 @@ static void WriteFrame(int fd, NSData *payload)
     WriteAll(fd, payload.bytes, payload.length);
 }
 
+static void *ConnectionThread(void *arg)
+{
+    int clientFd = (int)(intptr_t)arg;
+
+    @autoreleasepool
+    {
+        NSData *requestData = ReadFrame(clientFd);
+        NSDictionary *request = requestData
+            ? [NSJSONSerialization JSONObjectWithData:requestData options:0 error:nil]
+            : nil;
+
+        if ([request isKindOfClass:[NSDictionary class]] && [request[@"cmd"] isEqual:@"subscribe"])
+        {
+            NSData *ack = [NSJSONSerialization dataWithJSONObject:@{ @"ok": @YES } options:0 error:nil];
+            WriteFrame(clientFd, ack);
+
+            pthread_mutex_lock(&gSubscriberLock);
+            [gSubscriberFds addObject:@(clientFd)];
+            pthread_mutex_unlock(&gSubscriberLock);
+
+            uint8_t discard[64];
+            while (read(clientFd, discard, sizeof(discard)) > 0) { }
+
+            pthread_mutex_lock(&gSubscriberLock);
+            [gSubscriberFds removeObject:@(clientFd)];
+            pthread_mutex_unlock(&gSubscriberLock);
+        }
+        else
+        {
+            NSDictionary *response = [request isKindOfClass:[NSDictionary class]]
+                ? HandleRequest(request)
+                : @{ @"ok": @NO, @"error": @"bad request" };
+            NSData *responseData = [NSJSONSerialization dataWithJSONObject:response options:0 error:nil];
+            WriteFrame(clientFd, responseData);
+        }
+    }
+
+    close(clientFd);
+    return NULL;
+}
+
 static void *AcceptLoop(void *arg)
 {
     unlink(kSocketPath.UTF8String);
@@ -328,7 +385,7 @@ static void *AcceptLoop(void *arg)
 
     chmod(kSocketPath.UTF8String, 0600);
 
-    if (listen(serverFd, 4) != 0)
+    if (listen(serverFd, 8) != 0)
     {
         return NULL;
     }
@@ -341,29 +398,129 @@ static void *AcceptLoop(void *arg)
             continue;
         }
 
-        @autoreleasepool
-        {
-            NSData *requestData = ReadFrame(clientFd);
-            if (requestData)
-            {
-                NSDictionary *request = [NSJSONSerialization JSONObjectWithData:requestData options:0 error:nil];
-                NSDictionary *response = [request isKindOfClass:[NSDictionary class]]
-                    ? HandleRequest(request)
-                    : @{ @"ok": @NO, @"error": @"bad request" };
-                NSData *responseData = [NSJSONSerialization dataWithJSONObject:response options:0 error:nil];
-                WriteFrame(clientFd, responseData);
-            }
-        }
-
-        close(clientFd);
+        pthread_t thread;
+        pthread_create(&thread, NULL, ConnectionThread, (void *)(intptr_t)clientFd);
+        pthread_detach(thread);
     }
 
     return NULL;
 }
 
+static double SecondsSinceMacEpoch(id dateValue)
+{
+    return [dateValue isKindOfClass:[NSDate class]] ? [(NSDate *)dateValue timeIntervalSinceReferenceDate] : 0.0;
+}
+
+static id ValueOrNull(id value)
+{
+    return value ?: [NSNull null];
+}
+
+static NSDictionary *BuildMessageDict(id message)
+{
+    if (!message)
+    {
+        return nil;
+    }
+
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+
+    @try { d[@"guid"] = ValueOrNull([message valueForKey:@"guid"]); } @catch (NSException *e) {}
+    @try { d[@"text"] = ValueOrNull([message valueForKey:@"plainBody"]); } @catch (NSException *e) {}
+    @try {
+        id sender = [message valueForKey:@"sender"];
+        d[@"senderHandleId"] = ValueOrNull([sender valueForKey:@"id"]);
+    } @catch (NSException *e) {}
+    @try { d[@"isFromMe"] = @([[message valueForKey:@"isFromMe"] boolValue]); } @catch (NSException *e) { d[@"isFromMe"] = @NO; }
+    @try { d[@"isEmpty"] = @([[message valueForKey:@"isEmpty"] boolValue]); } @catch (NSException *e) { d[@"isEmpty"] = @NO; }
+    @try { d[@"isSent"] = @([[message valueForKey:@"isSent"] boolValue]); } @catch (NSException *e) { d[@"isSent"] = @NO; }
+    @try { d[@"isDelivered"] = @([[message valueForKey:@"isDelivered"] boolValue]); } @catch (NSException *e) { d[@"isDelivered"] = @NO; }
+    @try { d[@"isRead"] = @([[message valueForKey:@"isRead"] boolValue]); } @catch (NSException *e) { d[@"isRead"] = @NO; }
+    @try { d[@"isFinished"] = @([[message valueForKey:@"isFinished"] boolValue]); } @catch (NSException *e) { d[@"isFinished"] = @NO; }
+    @try { d[@"timeSeconds"] = @(SecondsSinceMacEpoch([message valueForKey:@"time"])); } @catch (NSException *e) { d[@"timeSeconds"] = @0; }
+    @try { d[@"timeDeliveredSeconds"] = @(SecondsSinceMacEpoch([message valueForKey:@"timeDelivered"])); } @catch (NSException *e) { d[@"timeDeliveredSeconds"] = @0; }
+    @try { d[@"timeReadSeconds"] = @(SecondsSinceMacEpoch([message valueForKey:@"timeRead"])); } @catch (NSException *e) { d[@"timeReadSeconds"] = @0; }
+    @try { d[@"balloonBundleId"] = ValueOrNull([message valueForKey:@"balloonBundleID"]); } @catch (NSException *e) {}
+    @try {
+        NSData *payload = [message valueForKey:@"payloadData"];
+        d[@"payloadDataBase64"] = payload.length > 0 ? [payload base64EncodedStringWithOptions:0] : [NSNull null];
+    } @catch (NSException *e) {}
+    @try { d[@"isAssociatedMessage"] = @([[message valueForKey:@"isAssociatedMessage"] boolValue]); } @catch (NSException *e) { d[@"isAssociatedMessage"] = @NO; }
+    @try { d[@"associatedMessageGuid"] = ValueOrNull([message valueForKey:@"associatedMessageGUID"]); } @catch (NSException *e) {}
+    @try { d[@"associatedMessageType"] = ValueOrNull([message valueForKey:@"associatedMessageType"]); } @catch (NSException *e) {}
+    @try { d[@"associatedMessageEmoji"] = ValueOrNull([message valueForKey:@"associatedMessageEmoji"]); } @catch (NSException *e) {}
+    @try { d[@"isReply"] = @([[message valueForKey:@"isReply"] boolValue]); } @catch (NSException *e) { d[@"isReply"] = @NO; }
+    @try { d[@"threadIdentifier"] = ValueOrNull([message valueForKey:@"threadIdentifier"]); } @catch (NSException *e) {}
+    @try { d[@"hasEditedParts"] = @([[message valueForKey:@"hasEditedParts"] boolValue]); } @catch (NSException *e) { d[@"hasEditedParts"] = @NO; }
+    @try { d[@"dateEditedSeconds"] = @(SecondsSinceMacEpoch([message valueForKey:@"dateEdited"])); } @catch (NSException *e) { d[@"dateEditedSeconds"] = @0; }
+    @try { d[@"hasRetractedParts"] = @([[message valueForKey:@"hasRetractedParts"] boolValue]); } @catch (NSException *e) { d[@"hasRetractedParts"] = @NO; }
+
+    return d;
+}
+
+static void BroadcastToSubscribers(NSDictionary *eventDict)
+{
+    NSData *payload = [NSJSONSerialization dataWithJSONObject:eventDict options:0 error:nil];
+    if (!payload)
+    {
+        return;
+    }
+
+    NSMutableArray<NSNumber *> *deadFds = [NSMutableArray array];
+
+    pthread_mutex_lock(&gSubscriberLock);
+    NSArray<NSNumber *> *fds = [gSubscriberFds copy];
+    pthread_mutex_unlock(&gSubscriberLock);
+
+    for (NSNumber *fdNum in fds)
+    {
+        int fd = fdNum.intValue;
+        uint32_t length = htonl((uint32_t)payload.length);
+        if (write(fd, &length, sizeof(length)) != (ssize_t)sizeof(length) ||
+            write(fd, payload.bytes, payload.length) != (ssize_t)payload.length)
+        {
+            [deadFds addObject:fdNum];
+        }
+    }
+
+    if (deadFds.count > 0)
+    {
+        pthread_mutex_lock(&gSubscriberLock);
+        [gSubscriberFds removeObjectsInArray:deadFds];
+        pthread_mutex_unlock(&gSubscriberLock);
+    }
+}
+
+static void InstallMessageWatcher(void)
+{
+    [[NSNotificationCenter defaultCenter] addObserverForName:@"__kIMChatMessageDidChangeNotification"
+                                                        object:nil
+                                                         queue:nil
+                                                    usingBlock:^(NSNotification *note) {
+        id chat = note.object;
+        NSDictionary *newMessage = BuildMessageDict(note.userInfo[@"__kIMChatValueKey"]);
+        if (!newMessage)
+        {
+            return;
+        }
+        NSDictionary *oldMessage = BuildMessageDict(note.userInfo[@"__kIMChatOldValueKey"]);
+
+        NSMutableDictionary *event = [NSMutableDictionary dictionary];
+        @try { event[@"chatIdentifier"] = ValueOrNull([chat valueForKey:@"chatIdentifier"]); } @catch (NSException *e) {}
+        @try { event[@"chatGuid"] = ValueOrNull([chat valueForKey:@"guid"]); } @catch (NSException *e) {}
+        event[@"new"] = newMessage;
+        event[@"old"] = oldMessage ?: [NSNull null];
+
+        BroadcastToSubscribers(event);
+    }];
+}
+
 __attribute__((constructor))
 static void MessagesInjectorInit(void)
 {
+    gSubscriberFds = [NSMutableArray array];
+    InstallMessageWatcher();
+
     pthread_t thread;
     pthread_create(&thread, NULL, AcceptLoop, NULL);
 }
