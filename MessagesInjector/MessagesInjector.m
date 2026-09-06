@@ -44,34 +44,42 @@ static NSDictionary *HandleRequest(NSDictionary *request)
         ? [[NSData alloc] initWithBase64EncodedString:payloadBase64 options:0]
         : nil;
 
-    IMChat *chat = [[IMChatRegistry sharedInstance] existingChatWithGUID:chatGuid];
-    if (!chat)
-    {
-        return @{ @"ok": @NO, @"error": @"chat not found" };
-    }
+    __block NSDictionary *response = nil;
 
-    NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        IMChat *chat = [[IMChatRegistry sharedInstance] existingChatWithGUID:chatGuid];
+        if (!chat)
+        {
+            response = @{ @"ok": @NO, @"error": @"chat not found" };
+            return;
+        }
 
-    IMMessage *message = [[IMMessage alloc] initWithSender:nil
-                                                        time:nil
-                                                        text:attributedText
-                                              messageSubject:nil
-                                           fileTransferGUIDs:nil
-                                                       flags:100005
-                                                       error:nil
-                                                        guid:nil
-                                                     subject:nil
-                                             balloonBundleID:[balloonBundleId isKindOfClass:[NSString class]] && balloonBundleId.length > 0 ? balloonBundleId : nil
-                                                 payloadData:payloadData
-                                      expressiveSendStyleID:nil
-                                            threadIdentifier:nil];
-    if (!message)
-    {
-        return @{ @"ok": @NO, @"error": @"failed to build message" };
-    }
+        NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
 
-    [chat sendMessage:message];
-    return @{ @"ok": @YES };
+        IMMessage *message = [[IMMessage alloc] initWithSender:nil
+                                                            time:nil
+                                                            text:attributedText
+                                                  messageSubject:nil
+                                               fileTransferGUIDs:nil
+                                                           flags:100005
+                                                           error:nil
+                                                            guid:nil
+                                                         subject:nil
+                                                 balloonBundleID:[balloonBundleId isKindOfClass:[NSString class]] && balloonBundleId.length > 0 ? balloonBundleId : nil
+                                                     payloadData:payloadData
+                                          expressiveSendStyleID:nil
+                                                threadIdentifier:nil];
+        if (!message)
+        {
+            response = @{ @"ok": @NO, @"error": @"failed to build message" };
+            return;
+        }
+
+        [chat sendMessage:message];
+        response = @{ @"ok": @YES };
+    });
+
+    return response;
 }
 
 static void WriteAll(int fd, const void *buf, size_t len)
