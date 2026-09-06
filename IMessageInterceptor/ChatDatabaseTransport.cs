@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 
 namespace IMessage;
 
-internal sealed class ChatDatabaseTransport : IMessageTransport
+public class ChatDatabaseTransport : IMessageTransport
 {
     private static readonly DateTime MacEpoch = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -38,7 +38,7 @@ internal sealed class ChatDatabaseTransport : IMessageTransport
         }
     }
 
-    public Task SendAsync(string chatIdentifier, OutboundMessage message)
+    public async Task SendAsync(string chatIdentifier, OutboundMessage message)
     {
         if (message.SenderAccountUniqueId is { Length: > 0 } accountUniqueId)
         {
@@ -48,11 +48,30 @@ internal sealed class ChatDatabaseTransport : IMessageTransport
                     "sendViaAccount only supports plain text - balloon/payload sends must go through the default account");
             }
 
-            return _injector.SendViaAccountAsync(accountUniqueId, chatIdentifier, message.Text, message.SenderIdentityId);
+            await _injector.SendViaAccountAsync(accountUniqueId, chatIdentifier, message.Text, message.SenderIdentityId);
+            return;
         }
 
+        await EnsureChatExistsAsync(chatIdentifier);
+
         var chatGuid = BuildChatGuid(chatIdentifier);
-        return _injector.SendAsync(chatGuid, message.Text, message.BalloonBundleId, message.RawPayload);
+        await _injector.SendAsync(chatGuid, message.Text, message.BalloonBundleId, message.RawPayload);
+    }
+
+    private async Task EnsureChatExistsAsync(string chatIdentifier)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM chat WHERE chat_identifier = $chatIdentifier LIMIT 1";
+        command.Parameters.AddWithValue("$chatIdentifier", chatIdentifier);
+
+        var result = await command.ExecuteScalarAsync();
+        if (result is null)
+        {
+            throw new InvalidOperationException($"no chat found with identifier '{chatIdentifier}'");
+        }
     }
 
     public Task<IReadOnlyList<ImAccountInfo>> ListAccountsAsync() => _injector.ListAccountsAsync();
