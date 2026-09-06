@@ -12,4 +12,13 @@
     <ProjectReference Include="..\IMessageInterceptor\IMessageInterceptor.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Solvers\Collins Scrabble Words (2019).txt" LogicalName="CollinsScrabbleWords2019.txt" />
+    <EmbeddedResource Include="Commands\Fonts\Larry3D.flf" LogicalName="Larry3D.flf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Figgle" Version="0.6.6" />
+  </ItemGroup>
+
 </Project>
