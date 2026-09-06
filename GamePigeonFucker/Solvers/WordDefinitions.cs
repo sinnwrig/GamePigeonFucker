@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 
 
 public sealed class TrieNode
@@ -26,6 +27,19 @@ public class WordDefinitions
     public static WordDefinitions LoadFromFile(FileInfo file, int wordLengthCap)
     {
         return LoadFromLines(File.ReadAllLines(file.FullName), wordLengthCap);
+    }
+
+
+    public static WordDefinitions LoadFromEmbeddedResource(string resourceName, int wordLengthCap, Assembly? assembly = null)
+    {
+        assembly ??= Assembly.GetExecutingAssembly();
+
+        using Stream stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new FileNotFoundException($"Embedded resource not found: {resourceName}");
+
+        using StreamReader reader = new(stream);
+
+        return LoadFromPlaintext(reader.ReadToEnd(), wordLengthCap);
     }
 
 
