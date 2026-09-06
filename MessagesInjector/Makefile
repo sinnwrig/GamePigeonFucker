@@ -4,7 +4,7 @@ FRAMEWORKS = -F/System/Library/PrivateFrameworks -framework IMCore -framework Fo
 all: $(TARGET)
 
 $(TARGET): MessagesInjector.m
-	clang -dynamiclib -fobjc-arc $(FRAMEWORKS) -o $(TARGET) MessagesInjector.m
+	clang -arch arm64e -dynamiclib -fobjc-arc $(FRAMEWORKS) -o $(TARGET) MessagesInjector.m
 
 clean:
 	rm -f $(TARGET)
