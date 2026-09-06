@@ -1,11 +1,28 @@
-#!/bin/sh
+#!/bin/bash
+set -euo pipefail
+
 DIR="$(cd "$(dirname "$0")" && pwd)"
-killall Messages 2>/dev/null
+APP_PATH="$DIR/Messages-patched.app"
+SOCKET_PATH="/tmp/gamepigeonfucker-injector.sock"
+
+log() { printf '==> %s\n' "$1"; }
+fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
+
+[ -d "$APP_PATH" ] || fail "$APP_PATH not found - run install.sh first"
+
+log "Killing any running Messages"
+killall Messages >/dev/null 2>&1 || true
 sleep 1
-rm -f /tmp/gamepigeonfucker-injector.sock
+rm -f "$SOCKET_PATH"
 
-nohup env DYLD_INSERT_LIBRARIES="$DIR/libMessagesInjector.dylib" "$DIR/Messages-unsigned.app/Contents/MacOS/Messages" > /tmp/msg_unsigned.log 2>&1 < /dev/null &
-disown
+log "Launching $(basename "$APP_PATH")"
+open "$APP_PATH"
 
-sleep 3
-ls -la /tmp/gamepigeonfucker-injector.sock
+log "Waiting for $SOCKET_PATH"
+for _ in $(seq 1 20); do
+    [ -S "$SOCKET_PATH" ] && break
+    sleep 1
+done
+[ -S "$SOCKET_PATH" ] || fail "$SOCKET_PATH never appeared - check Console.app for a crash log"
+
+log "Ready: $SOCKET_PATH"
