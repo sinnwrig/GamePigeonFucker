@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="IMessageInterceptor/IMessageInterceptor.csproj" />
+  <Project Path="GamePigeonProtocol/GamePigeonProtocol.csproj" />
+  <Project Path="GamePigeonFucker/GamePigeonFucker.csproj" />
+</Solution>
