@@ -20,7 +20,8 @@ static NSString *const kSocketPath = @"/tmp/gamepigeonfucker-injector.sock";
                         subject:(id)subject2
                 balloonBundleID:(NSString *)balloonBundleID
                     payloadData:(NSData *)payloadData
-          expressiveSendStyleID:(id)styleID;
+          expressiveSendStyleID:(id)styleID
+                threadIdentifier:(id)threadIdentifier;
 @end
 
 @interface IMChat : NSObject
@@ -61,7 +62,8 @@ static NSDictionary *HandleRequest(NSDictionary *request)
                                                      subject:nil
                                              balloonBundleID:[balloonBundleId isKindOfClass:[NSString class]] && balloonBundleId.length > 0 ? balloonBundleId : nil
                                                  payloadData:payloadData
-                                      expressiveSendStyleID:nil];
+                                      expressiveSendStyleID:nil
+                                            threadIdentifier:nil];
     if (!message)
     {
         return @{ @"ok": @NO, @"error": error.localizedDescription ?: @"failed to build message" };
