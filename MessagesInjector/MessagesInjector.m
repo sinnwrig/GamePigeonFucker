@@ -4,6 +4,7 @@
 #import <unistd.h>
 #import <pthread.h>
 #import <arpa/inet.h>
+#import <sys/stat.h>
 
 static NSString *const kSocketPath = @"/tmp/gamepigeonfucker-injector.sock";
 
