@@ -6,7 +6,14 @@ namespace IMessage;
 
 internal sealed class InjectorClient
 {
-    private const string SocketPath = "/tmp/gamepigeonfucker-injector.sock";
+    private const string DefaultSocketPath = "/tmp/gamepigeonfucker-injector.sock";
+
+    private readonly string _socketPath;
+
+    public InjectorClient(string? socketPath = null)
+    {
+        _socketPath = socketPath ?? DefaultSocketPath;
+    }
 
     public async Task SendAsync(string chatGuid, string text, string? balloonBundleId, byte[]? payloadData)
     {
@@ -42,6 +49,36 @@ internal sealed class InjectorClient
         return root.TryGetProperty("chatDescription", out var chatDescription)
             ? chatDescription.GetString() ?? ""
             : "";
+    }
+
+    public async IAsyncEnumerable<JsonElement> SubscribeAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(_socketPath), cancellationToken);
+
+        await WriteFrameAsync(socket, JsonSerializer.SerializeToUtf8Bytes(new { cmd = "subscribe" }));
+
+        var ackBytes = await ReadFrameAsync(socket, cancellationToken);
+        using (var ackDocument = JsonDocument.Parse(ackBytes))
+        {
+            RequireOk(ackDocument.RootElement, "subscribe");
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            byte[] frameBytes;
+            try
+            {
+                frameBytes = await ReadFrameAsync(socket, cancellationToken);
+            }
+            catch (IOException)
+            {
+                yield break;
+            }
+
+            using var document = JsonDocument.Parse(frameBytes);
+            yield return document.RootElement.Clone();
+        }
     }
 
     public async Task<IReadOnlyList<ImAccountInfo>> ListAccountsAsync()
@@ -89,14 +126,14 @@ internal sealed class InjectorClient
         }
     }
 
-    private static async Task<JsonElement> SendRequestAsync(object request)
+    private async Task<JsonElement> SendRequestAsync(object request)
     {
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        await socket.ConnectAsync(new UnixDomainSocketEndPoint(SocketPath));
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(_socketPath));
 
         await WriteFrameAsync(socket, JsonSerializer.SerializeToUtf8Bytes(request));
 
-        var responseBytes = await ReadFrameAsync(socket);
+        var responseBytes = await ReadFrameAsync(socket, CancellationToken.None);
         using var document = JsonDocument.Parse(responseBytes);
         return document.RootElement.Clone();
     }
@@ -109,20 +146,20 @@ internal sealed class InjectorClient
         await socket.SendAsync(payload, SocketFlags.None);
     }
 
-    private static async Task<byte[]> ReadFrameAsync(Socket socket)
+    private static async Task<byte[]> ReadFrameAsync(Socket socket, CancellationToken cancellationToken)
     {
-        var lengthBuffer = await ReadExactAsync(socket, 4);
+        var lengthBuffer = await ReadExactAsync(socket, 4, cancellationToken);
         var length = BinaryPrimitives.ReadUInt32BigEndian(lengthBuffer);
-        return await ReadExactAsync(socket, (int)length);
+        return await ReadExactAsync(socket, (int)length, cancellationToken);
     }
 
-    private static async Task<byte[]> ReadExactAsync(Socket socket, int count)
+    private static async Task<byte[]> ReadExactAsync(Socket socket, int count, CancellationToken cancellationToken)
     {
         var buffer = new byte[count];
         var received = 0;
         while (received < count)
         {
-            var n = await socket.ReceiveAsync(buffer.AsMemory(received, count - received), SocketFlags.None);
+            var n = await socket.ReceiveAsync(buffer.AsMemory(received, count - received), SocketFlags.None, cancellationToken);
             if (n == 0)
             {
                 throw new IOException("injector connection closed");
