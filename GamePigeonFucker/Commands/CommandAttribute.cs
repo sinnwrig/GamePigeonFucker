@@ -33,11 +33,13 @@ public class CommandParamAttribute : Attribute
 {
     public string? ParameterName;
     public int Count;
+    public bool Optional;
 
-    public CommandParamAttribute(string? paramName = null, int count = 0)
+    public CommandParamAttribute(string? paramName = null, int count = 0, bool optional = false)
     {
         ParameterName = paramName;
         Count = count;
+        Optional = optional;
     }
 }
 

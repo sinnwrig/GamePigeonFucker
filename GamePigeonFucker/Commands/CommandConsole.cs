@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -12,12 +13,28 @@ public class CommandConsole
     private readonly Dictionary<string, CommandInfo> _enabledCommands = new();
     private readonly List<CommandInfo> _disabledCommands = new();
 
+    private readonly object _consoleLock = new();
+    private readonly TextWriter _rawOut;
+    private readonly List<string> _history = new();
+    private readonly StringBuilder _inputBuffer = new();
+    private readonly string _promptText = "> ";
+    private int _historyIndex;
+    private bool _lineActive;
+
     private bool _running;
+    public Action<string>? OnMessage;
+
+    private static string? _helpPreamble;
 
 
-    public CommandConsole()
+    public CommandConsole(string helpPreamble)
     {
         _current = this;
+        _helpPreamble = helpPreamble;
+
+        _rawOut = Console.Out;
+        Console.SetOut(new InterceptingWriter(this, _rawOut));
+
         DiscoverCommands();
     }
 
@@ -28,8 +45,7 @@ public class CommandConsole
 
         while (_running)
         {
-            Console.Write("> ");
-            string? line = Console.ReadLine();
+            string? line = ReadLine();
 
             if (line == null)
                 break;
@@ -40,6 +56,166 @@ public class CommandConsole
             if (!TryExecute(line, out string? error))
                 Console.WriteLine(error);
         }
+    }
+
+
+    private string? ReadLine()
+    {
+        if (Console.IsInputRedirected || Console.IsOutputRedirected)
+        {
+            Console.Write(_promptText);
+            return Console.ReadLine();
+        }
+
+        lock (_consoleLock)
+        {
+            _inputBuffer.Clear();
+            _historyIndex = _history.Count;
+            _lineActive = true;
+            RedrawLine();
+        }
+
+        while (true)
+        {
+            ConsoleKeyInfo key = Console.ReadKey(intercept: true);
+
+            lock (_consoleLock)
+            {
+                switch (key.Key)
+                {
+                    case ConsoleKey.Enter:
+                        string result = _inputBuffer.ToString();
+                        _lineActive = false;
+                        _rawOut.Write(Environment.NewLine);
+
+                        if (!string.IsNullOrWhiteSpace(result) && (_history.Count == 0 || _history[^1] != result))
+                            _history.Add(result);
+
+                        return result;
+
+                    case ConsoleKey.Backspace:
+                        if (_inputBuffer.Length > 0)
+                        {
+                            _inputBuffer.Length--;
+                            RedrawLine();
+                        }
+
+                        break;
+
+                    case ConsoleKey.UpArrow:
+                        NavigateHistory(-1);
+                        break;
+
+                    case ConsoleKey.DownArrow:
+                        NavigateHistory(1);
+                        break;
+
+                    case ConsoleKey.Escape:
+                        _inputBuffer.Clear();
+                        _historyIndex = _history.Count;
+                        RedrawLine();
+                        break;
+
+                    default:
+                        if (!char.IsControl(key.KeyChar))
+                        {
+                            _inputBuffer.Append(key.KeyChar);
+                            RedrawLine();
+                        }
+
+                        break;
+                }
+            }
+        }
+    }
+
+
+    private void NavigateHistory(int direction)
+    {
+        if (_history.Count == 0)
+            return;
+
+        int newIndex = Math.Clamp(_historyIndex + direction, 0, _history.Count);
+
+        if (newIndex == _historyIndex)
+            return;
+
+        _historyIndex = newIndex;
+        _inputBuffer.Clear();
+
+        if (_historyIndex < _history.Count)
+            _inputBuffer.Append(_history[_historyIndex]);
+
+        RedrawLine();
+    }
+
+
+    private void RedrawLine()
+    {
+        ClearCurrentLine();
+        _rawOut.Write(_promptText);
+        _rawOut.Write(_inputBuffer.ToString());
+    }
+
+
+    private void ClearCurrentLine()
+    {
+        if (Console.IsOutputRedirected)
+            return;
+
+        int width = SafeWindowWidth();
+        _rawOut.Write('\r');
+        _rawOut.Write(new string(' ', width));
+        _rawOut.Write('\r');
+    }
+
+
+    private static int SafeWindowWidth()
+    {
+        try { return Console.WindowWidth; }
+        catch { return 80; }
+    }
+
+
+    private void WriteThroughConsole(TextWriter inner, string text)
+    {
+        lock (_consoleLock)
+        {
+            if (_lineActive)
+            {
+                ClearCurrentLine();
+                inner.Write(text);
+                RedrawLine();
+            }
+            else
+            {
+                inner.Write(text);
+            }
+
+            OnMessage?.Invoke(text);
+        }
+    }
+
+
+    private class InterceptingWriter : TextWriter
+    {
+        private readonly CommandConsole _owner;
+        private readonly TextWriter _inner;
+
+
+        public InterceptingWriter(CommandConsole owner, TextWriter inner)
+        {
+            _owner = owner;
+            _inner = inner;
+        }
+
+
+        public override Encoding Encoding => _inner.Encoding;
+
+        public override void Write(char value) => _owner.WriteThroughConsole(_inner, value.ToString());
+        public override void Write(string? value) => _owner.WriteThroughConsole(_inner, value ?? string.Empty);
+        public override void WriteLine() => _owner.WriteThroughConsole(_inner, Environment.NewLine);
+        public override void WriteLine(string? value) => _owner.WriteThroughConsole(_inner, (value ?? string.Empty) + Environment.NewLine);
     }
 
 
@@ -58,6 +234,9 @@ public class CommandConsole
 
         int enabled = _current._enabledCommands.Count;
         int disabled = _current._disabledCommands.Count;
+
+        if (!string.IsNullOrWhiteSpace(_helpPreamble))
+            Console.WriteLine(_helpPreamble);
 
         Console.WriteLine($"{enabled + disabled} commands discovered, {enabled} enabled, {disabled} disabled");
         Console.WriteLine("Available commands:");
@@ -130,8 +309,19 @@ public class CommandConsole
 
                     if (take < 0 || cursor + take > args.Count)
                     {
-                        error = $"Not enough arguments for '{slot.Parameter.Name}' in command {commandName}";
-                        return false;
+                        if (!slot.Param.Optional)
+                        {
+                            error = $"Not enough arguments for '{slot.Parameter.Name}' in command {commandName}";
+                            return false;
+                        }
+
+                        object? missing = slot.Parameter.HasDefaultValue
+                            ? slot.Parameter.DefaultValue
+                            : Array.CreateInstance(slot.ElementType!, 0);
+
+                        invokeArgs[i] = missing;
+                        parsedValues[slot.Parameter.Name!] = missing;
+                        continue;
                     }
 
                     Array elements = Array.CreateInstance(slot.ElementType!, take);
@@ -155,8 +345,19 @@ public class CommandConsole
                 {
                     if (cursor >= args.Count)
                     {
-                        error = $"Missing argument for '{slot.Parameter.Name}' in command {commandName}";
-                        return false;
+                        if (!(slot.Param?.Optional ?? false))
+                        {
+                            error = $"Missing argument for '{slot.Parameter.Name}' in command {commandName}";
+                            return false;
+                        }
+
+                        object? missing = slot.Parameter.HasDefaultValue
+                            ? slot.Parameter.DefaultValue
+                            : GetDefault(slot.Parameter.ParameterType);
+
+                        invokeArgs[i] = missing;
+                        parsedValues[slot.Parameter.Name!] = missing;
+                        continue;
                     }
 
                     if (!TryConvert(args[cursor], slot.Parameter.ParameterType, out object? value))
@@ -214,6 +415,7 @@ public class CommandConsole
         CommandInfo info = new(method, method.GetCustomAttribute<CommandAttribute>()!);
 
         ParameterInfo[] parameters = method.GetParameters();
+        bool sawOptionalPositional = false;
 
         foreach (ParameterInfo parameter in parameters)
         {
@@ -288,6 +490,17 @@ public class CommandConsole
                 }
             }
 
+            if (flag == null && condition == null)
+            {
+                bool isOptionalPositional = param != null && param.Optional;
+
+                if (sawOptionalPositional && !isOptionalPositional)
+                    info.MarkInvalid($"Required parameter '{parameter.Name}' cannot follow an optional parameter");
+
+                if (isOptionalPositional)
+                    sawOptionalPositional = true;
+            }
+
             info.Slots.Add(slot);
         }
 
@@ -321,30 +534,34 @@ public class CommandConsole
         List<string> tokens = new();
         StringBuilder current = new();
         bool inQuotes = false;
+        bool tokenStarted = false;
 
         foreach (char c in line)
         {
             if (c == '"')
             {
                 inQuotes = !inQuotes;
+                tokenStarted = true;
                 continue;
             }
 
             if (!inQuotes && char.IsWhiteSpace(c))
             {
-                if (current.Length > 0)
+                if (tokenStarted)
                 {
                     tokens.Add(current.ToString());
                     current.Clear();
+                    tokenStarted = false;
                 }
 
                 continue;
             }
 
             current.Append(c);
+            tokenStarted = true;
         }
 
-        if (current.Length > 0)
+        if (tokenStarted)
             tokens.Add(current.ToString());
 
         return tokens.ToArray();
