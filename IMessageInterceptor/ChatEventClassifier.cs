@@ -2,9 +2,12 @@ using System.Text.Json;
 
 namespace IMessage;
 
-internal static class ChatEventClassifier
+internal sealed class ChatEventClassifier
 {
-    public static ChatEvent? Classify(JsonElement rawEvent)
+    private readonly HashSet<string> _seenGuids = new();
+    private readonly HashSet<string> _guidsWithPayload = new();
+
+    public ChatEvent? Classify(JsonElement rawEvent)
     {
         if (!rawEvent.TryGetProperty("new", out var newElement))
         {
@@ -27,9 +30,17 @@ internal static class ChatEventClassifier
         return Classify(chatIdentifier, chatGuid, newMessage, oldMessage);
     }
 
-    internal static ChatEvent Classify(string? chatIdentifier, string? chatGuid, RawMessageSnapshot newMessage, RawMessageSnapshot? oldMessage)
+    internal ChatEvent Classify(string? chatIdentifier, string? chatGuid, RawMessageSnapshot newMessage, RawMessageSnapshot? oldMessage)
     {
-        if (oldMessage is null)
+        var isFirstSeen = _seenGuids.Add(newMessage.Guid);
+        var hasPayloadNow = newMessage.BalloonBundleId is not null || newMessage.PayloadData is not null;
+        var hadPayloadBefore = _guidsWithPayload.Contains(newMessage.Guid);
+        if (hasPayloadNow)
+        {
+            _guidsWithPayload.Add(newMessage.Guid);
+        }
+
+        if (isFirstSeen || (hasPayloadNow && !hadPayloadBefore))
         {
             if (newMessage.IsAssociatedMessage)
             {
@@ -42,6 +53,11 @@ internal static class ChatEventClassifier
                 chatIdentifier, chatGuid, newMessage.Guid, newMessage.Timestamp, newMessage.IsFromMe,
                 newMessage.Text, newMessage.SenderHandleId, newMessage.BalloonBundleId, newMessage.PayloadData,
                 newMessage.IsReply, newMessage.ThreadIdentifier);
+        }
+
+        if (oldMessage is null)
+        {
+            return new ChatResyncEvent(chatIdentifier, chatGuid, newMessage.Guid, newMessage.Timestamp, newMessage.IsFromMe);
         }
 
         if (newMessage.HasEditedParts && (!oldMessage.HasEditedParts || newMessage.DateEditedSeconds != oldMessage.DateEditedSeconds))

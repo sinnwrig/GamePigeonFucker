@@ -3,6 +3,7 @@ namespace IMessage;
 public class LiveMessageTransport : IMessageTransport
 {
     private readonly InjectorClient _injector;
+    private readonly ChatEventClassifier _classifier = new();
 
     public LiveMessageTransport(string? injectorSocketPath = null)
     {
@@ -30,7 +31,7 @@ public class LiveMessageTransport : IMessageTransport
     {
         await foreach (var rawEvent in _injector.SubscribeAsync(cancellationToken))
         {
-            var chatEvent = ChatEventClassifier.Classify(rawEvent);
+            var chatEvent = _classifier.Classify(rawEvent);
             if (chatEvent is not null)
             {
                 onEvent(chatEvent);
