@@ -6,6 +6,7 @@ internal sealed class ChatEventClassifier
 {
     private readonly HashSet<string> _seenGuids = new();
     private readonly HashSet<string> _guidsWithPayload = new();
+    private readonly HashSet<string> _guidsWithText = new();
 
     public ChatEvent? Classify(JsonElement rawEvent)
     {
@@ -30,9 +31,10 @@ internal sealed class ChatEventClassifier
         return Classify(chatIdentifier, chatGuid, newMessage, oldMessage);
     }
 
-    internal ChatEvent Classify(string? chatIdentifier, string? chatGuid, RawMessageSnapshot newMessage, RawMessageSnapshot? oldMessage)
+    internal ChatEvent? Classify(string? chatIdentifier, string? chatGuid, RawMessageSnapshot newMessage, RawMessageSnapshot? oldMessage)
     {
         var isFirstSeen = _seenGuids.Add(newMessage.Guid);
+
         var hasPayloadNow = newMessage.BalloonBundleId is not null || newMessage.PayloadData is not null;
         var hadPayloadBefore = _guidsWithPayload.Contains(newMessage.Guid);
         if (hasPayloadNow)
@@ -40,9 +42,19 @@ internal sealed class ChatEventClassifier
             _guidsWithPayload.Add(newMessage.Guid);
         }
 
-        if (isFirstSeen || (hasPayloadNow && !hadPayloadBefore))
+        var hasTextNow = !string.IsNullOrEmpty(newMessage.Text);
+        var hadTextBefore = _guidsWithText.Contains(newMessage.Guid);
+        if (hasTextNow)
         {
-            if (newMessage.IsAssociatedMessage)
+            _guidsWithText.Add(newMessage.Guid);
+        }
+
+        var hasReportableContent = hasTextNow || hasPayloadNow || newMessage.IsAssociatedMessage;
+        var gotNewContent = (hasPayloadNow && !hadPayloadBefore) || (hasTextNow && !hadTextBefore);
+
+        if (gotNewContent || (isFirstSeen && hasReportableContent))
+        {
+            if (newMessage.IsAssociatedMessage && newMessage.BalloonBundleId is null)
             {
                 return new ReactionEvent(
                     chatIdentifier, chatGuid, newMessage.Guid, newMessage.Timestamp, newMessage.IsFromMe,
@@ -53,6 +65,11 @@ internal sealed class ChatEventClassifier
                 chatIdentifier, chatGuid, newMessage.Guid, newMessage.Timestamp, newMessage.IsFromMe,
                 newMessage.Text, newMessage.SenderHandleId, newMessage.BalloonBundleId, newMessage.PayloadData,
                 newMessage.IsReply, newMessage.ThreadIdentifier);
+        }
+
+        if (isFirstSeen)
+        {
+            return null;
         }
 
         if (oldMessage is null)
