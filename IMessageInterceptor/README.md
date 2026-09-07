@@ -124,8 +124,20 @@ Then point the transport at the local forwarded path:
 var transport = new LiveMessageTransport("/tmp/gpf-injector.sock");
 ```
 
-There is no database to sync for this mode - everything, including
-history-free live watching, goes through the socket.
+Or let `SshInjectorTunnel` manage that `ssh` subprocess for you - it
+starts the tunnel, waits for the local socket to appear, and kills the
+process on `Dispose()`:
+
+```csharp
+using var tunnel = await SshInjectorTunnel.StartAsync("user@mac-host");
+var transport = new LiveMessageTransport(tunnel.LocalSocketPath);
+```
+
+On the same machine as the injector, skip both of these and just use
+`new LiveMessageTransport()` - it defaults to the local
+`/tmp/gamepigeonfucker-injector.sock`. There is no database to sync for
+this mode either way - everything, including history-free live watching,
+goes through the socket.
 
 ## Sending
 
