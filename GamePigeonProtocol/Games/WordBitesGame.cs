@@ -12,7 +12,10 @@ public sealed record WordBitesState(
     string? Language,
     string? Level,
     string? Caption)
-    : GamePigeonGameState("wordbites", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
+    : GamePigeonGameState("wordbites", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName)
+{
+    public override GameTurnMode TurnMode => GameTurnMode.FreeForAll;
+}
 
 internal sealed class WordBitesGame : GamePigeonGameParserBase<WordBitesState>
 {

@@ -16,7 +16,10 @@ public sealed record AnagramsState(
     int? Words2,
     IReadOnlyList<string> WordsList1,
     IReadOnlyList<string> WordsList2)
-    : GamePigeonGameState("anagrams", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
+    : GamePigeonGameState("anagrams", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName)
+{
+    public override GameTurnMode TurnMode => GameTurnMode.FreeForAll;
+}
 
 internal sealed class AnagramsGame : GamePigeonGameParserBase<AnagramsState>
 {

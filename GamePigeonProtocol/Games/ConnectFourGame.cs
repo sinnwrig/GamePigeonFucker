@@ -13,7 +13,10 @@ public sealed record ConnectFourState(
     (int Column, int Row, int Player)? LastMove,
     string? WinnerId,
     int? WinnerSlot)
-    : GamePigeonGameState("connect", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
+    : GamePigeonGameState("connect", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName)
+{
+    public override GameTurnMode TurnMode => GameTurnMode.Lockstep;
+}
 
 internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourState>
 {

@@ -17,7 +17,12 @@ public sealed record WordHuntState(
     int? Words2,
     IReadOnlyList<string> WordsList1,
     IReadOnlyList<string> WordsList2)
-    : GamePigeonGameState("hunt", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
+    : GamePigeonGameState("hunt", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName)
+{
+    public override GameTurnMode TurnMode => GameTurnMode.FreeForAll;
+
+    public override bool IsOpenInvite => RawFields.ContainsKey("start");
+}
 
 internal sealed class WordHuntGame : GamePigeonGameParserBase<WordHuntState>
 {

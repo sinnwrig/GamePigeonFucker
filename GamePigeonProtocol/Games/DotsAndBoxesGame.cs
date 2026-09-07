@@ -10,7 +10,10 @@ public sealed record DotsAndBoxesState(
     string? GameName,
     int? Size,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("dots", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
+    : GamePigeonGameState("dots", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName)
+{
+    public override GameTurnMode TurnMode => GameTurnMode.Lockstep;
+}
 
 internal sealed class DotsAndBoxesGame : GamePigeonGameParserBase<DotsAndBoxesState>
 {

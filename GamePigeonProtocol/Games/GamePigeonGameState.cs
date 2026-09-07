@@ -1,5 +1,7 @@
 namespace GamePigeon.Games;
 
+// Classified: connect/dots = Lockstep, hunt/anagrams/wordbites = FreeForAll.
+// Unclassified (default Lockstep): golf, mancala, beer, knock, fill, archery.
 public enum GameTurnMode
 {
     Lockstep,
