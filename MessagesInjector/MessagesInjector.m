@@ -129,6 +129,91 @@ static NSDictionary *HandleIntrospect(void)
     return @{ @"ok": @YES, @"IMChatRegistry_chatForHandle": names, @"IMAccount_handle_methods": acctNames, @"IMChat_lastAddressed_methods": chatNames, @"IMMessage_methods": messageNames, @"IMMessage_init_methods": messageInitMethods };
 }
 
+static NSDictionary *HandleListClasses(NSDictionary *request)
+{
+    NSString *filter = request[@"filter"];
+    NSString *lowerFilter = [filter isKindOfClass:[NSString class]] ? filter.lowercaseString : nil;
+
+    unsigned int count = 0;
+    Class *classes = objc_copyClassList(&count);
+    NSMutableArray *names = [NSMutableArray array];
+    for (unsigned int i = 0; i < count; i++)
+    {
+        NSString *name = NSStringFromClass(classes[i]);
+        if (lowerFilter.length == 0 || [name.lowercaseString containsString:lowerFilter])
+        {
+            [names addObject:name];
+        }
+    }
+    free(classes);
+
+    return @{ @"ok": @YES, @"classes": names };
+}
+
+static NSArray<NSString *> *MethodNamesForClass(Class cls)
+{
+    NSMutableArray *names = [NSMutableArray array];
+    unsigned int count = 0;
+    Method *methods = class_copyMethodList(cls, &count);
+    for (unsigned int i = 0; i < count; i++)
+    {
+        [names addObject:NSStringFromSelector(method_getName(methods[i]))];
+    }
+    free(methods);
+    return names;
+}
+
+static NSDictionary *HandleDumpClass(NSDictionary *request)
+{
+    NSString *className = request[@"className"];
+    if (![className isKindOfClass:[NSString class]] || className.length == 0)
+    {
+        return @{ @"ok": @NO, @"error": @"className required" };
+    }
+
+    Class cls = NSClassFromString(className);
+    if (!cls)
+    {
+        return @{ @"ok": @NO, @"error": @"class not found" };
+    }
+
+    NSMutableArray *propertyNames = [NSMutableArray array];
+    unsigned int propertyCount = 0;
+    objc_property_t *properties = class_copyPropertyList(cls, &propertyCount);
+    for (unsigned int i = 0; i < propertyCount; i++)
+    {
+        [propertyNames addObject:[NSString stringWithUTF8String:property_getName(properties[i])]];
+    }
+    free(properties);
+
+    NSMutableArray *ivarNames = [NSMutableArray array];
+    unsigned int ivarCount = 0;
+    Ivar *ivars = class_copyIvarList(cls, &ivarCount);
+    for (unsigned int i = 0; i < ivarCount; i++)
+    {
+        [ivarNames addObject:[NSString stringWithUTF8String:ivar_getName(ivars[i])]];
+    }
+    free(ivars);
+
+    NSMutableArray *superclassChain = [NSMutableArray array];
+    Class super = class_getSuperclass(cls);
+    while (super)
+    {
+        [superclassChain addObject:NSStringFromClass(super)];
+        super = class_getSuperclass(super);
+    }
+
+    return @{
+        @"ok": @YES,
+        @"className": className,
+        @"superclassChain": superclassChain,
+        @"instanceMethods": MethodNamesForClass(cls),
+        @"classMethods": MethodNamesForClass(object_getClass(cls)),
+        @"properties": propertyNames,
+        @"ivars": ivarNames,
+    };
+}
+
 static NSDictionary *HandleSendViaAccount(NSDictionary *request)
 {
     NSString *accountUniqueID = request[@"accountUniqueID"];
@@ -232,6 +317,14 @@ static NSDictionary *HandleRequest(NSDictionary *request)
     if ([request[@"cmd"] isEqual:@"introspect"])
     {
         return HandleIntrospect();
+    }
+    if ([request[@"cmd"] isEqual:@"listClasses"])
+    {
+        return HandleListClasses(request);
+    }
+    if ([request[@"cmd"] isEqual:@"dumpClass"])
+    {
+        return HandleDumpClass(request);
     }
     if ([request[@"cmd"] isEqual:@"sendViaAccount"])
     {
