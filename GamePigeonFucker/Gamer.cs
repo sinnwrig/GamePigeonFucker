@@ -10,19 +10,55 @@ public class Gamer
     private readonly HashSet<string> _enabledSolvers = new(StringComparer.OrdinalIgnoreCase);
     private MessagingService? _service;
 
+    public static Gamer? Instance { get; private set; }
+
     public string PlayerUuid { get; }
     public string PlayerAvatar { get; }
     public GamePigeonDispatcher Dispatcher => _dispatcher;
     public MessagingService? Service => _service;
     public IEnumerable<string> SolverNames => _solvers.Keys;
 
-    public Gamer(string playerUuid, string playerAvatar)
+
+    private string DefaultUUID() => GamePigeonFucker.Options.GetString("GamePigeonPlayerUuid", Guid.NewGuid().ToString())!;
+    private string DefaultAvatar() => GamePigeonFucker.Options.GetString("GamePigeonAvatar", "")!;
+
+
+    public Gamer(string? playerUuid = null, string? playerAvatar = null)
     {
-        PlayerUuid = playerUuid;
-        PlayerAvatar = playerAvatar;
-        _dispatcher = new GamePigeonDispatcher(); // GamePigeonGameRegistry.CreateDefault() by default
+        PlayerUuid = playerUuid ?? DefaultUUID();
+        PlayerAvatar = playerAvatar ?? DefaultAvatar();
+        _dispatcher = new GamePigeonDispatcher();
 
         RegisterSolver(new ConnectFourSolver());
+        RegisterSolver(new WordHuntSolver());
+
+        Instance = this;
+    }
+
+
+    public enum OnOff
+    {
+        on,
+        off
+    }
+
+
+    [Command("/hax", "turns on hax")]
+    public static void Hax([CommandParam] OnOff onOff, [CommandParam] string hack)
+    {
+        if (Instance == null)
+        {
+            Console.WriteLine("Gamer not initialized");
+            return;
+        }
+
+        if (!Instance.SetEnabled(hack, onOff == OnOff.on))
+        {
+            Console.WriteLine($"Unknown solver '{hack}'. Available: {string.Join(", ", Instance.SolverNames)}");
+            return;
+        }
+
+        Console.WriteLine($"{hack} hax turned {onOff}");
     }
 
     private void RegisterSolver(IGameSolver solver)
