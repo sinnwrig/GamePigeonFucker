@@ -107,16 +107,26 @@ static NSDictionary *HandleIntrospect(void)
     unsigned int count4 = 0;
     Method *methods4 = class_copyMethodList(messageClass, &count4);
     NSMutableArray *messageNames = [NSMutableArray array];
+    NSMutableArray *messageInitMethods = [NSMutableArray array];
     for (unsigned int i = 0; i < count4; i++) {
         NSString *name = NSStringFromSelector(method_getName(methods4[i]));
-        if ([name hasPrefix:@"_"] || [name hasPrefix:@"init"] || [name hasPrefix:@"set"]) {
+        if ([name hasPrefix:@"init"]) {
+            const char *typeEncoding = method_getTypeEncoding(methods4[i]);
+            [messageInitMethods addObject:@{
+                @"selector": name,
+                @"typeEncoding": typeEncoding ? [NSString stringWithUTF8String:typeEncoding] : @"?",
+                @"argumentCount": @(method_getNumberOfArguments(methods4[i])),
+            }];
+            continue;
+        }
+        if ([name hasPrefix:@"_"] || [name hasPrefix:@"set"]) {
             continue;
         }
         [messageNames addObject:name];
     }
     free(methods4);
 
-    return @{ @"ok": @YES, @"IMChatRegistry_chatForHandle": names, @"IMAccount_handle_methods": acctNames, @"IMChat_lastAddressed_methods": chatNames, @"IMMessage_methods": messageNames };
+    return @{ @"ok": @YES, @"IMChatRegistry_chatForHandle": names, @"IMAccount_handle_methods": acctNames, @"IMChat_lastAddressed_methods": chatNames, @"IMMessage_methods": messageNames, @"IMMessage_init_methods": messageInitMethods };
 }
 
 static NSDictionary *HandleSendViaAccount(NSDictionary *request)
@@ -194,7 +204,7 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
                                                             text:attributedText
                                                   messageSubject:nil
                                                fileTransferGUIDs:nil
-                                                           flags:100005
+                                                           flags:0x100005
                                                            error:nil
                                                             guid:nil
                                                          subject:nil
@@ -255,7 +265,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
                                                             text:attributedText
                                                   messageSubject:nil
                                                fileTransferGUIDs:nil
-                                                           flags:100005
+                                                           flags:0x100005
                                                            error:nil
                                                             guid:nil
                                                          subject:nil
