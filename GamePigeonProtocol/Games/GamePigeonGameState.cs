@@ -1,5 +1,18 @@
 namespace GamePigeon.Games;
 
+public enum GameTurnMode
+{
+    Lockstep,
+    FreeForAll,
+}
+
+public enum GamePigeonPlayerSlot
+{
+    Unknown,
+    Player1,
+    Player2,
+}
+
 public abstract record GamePigeonGameState(
     string GameKey,
     string? SessionSender,
@@ -8,7 +21,21 @@ public abstract record GamePigeonGameState(
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
     Guid? SessionId,
-    string? GameName);
+    string? GameName)
+{
+    public virtual GameTurnMode TurnMode => GameTurnMode.Lockstep;
+
+    public virtual bool IsOpenInvite => false;
+
+    public bool CanRespond(bool messageIsFromMe) =>
+        !messageIsFromMe || (TurnMode == GameTurnMode.FreeForAll && IsOpenInvite);
+
+    public GamePigeonPlayerSlot GetPlayerSlot(string playerUuid) => Player1Id == playerUuid
+        ? GamePigeonPlayerSlot.Player1
+        : Player2Id == playerUuid
+            ? GamePigeonPlayerSlot.Player2
+            : GamePigeonPlayerSlot.Unknown;
+}
 
 internal static class GamePigeonFieldHelpers
 {

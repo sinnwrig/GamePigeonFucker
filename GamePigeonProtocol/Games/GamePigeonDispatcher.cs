@@ -7,6 +7,13 @@ public sealed class GamePigeonDispatcher
 {
     private readonly GamePigeonGameRegistry _registry;
     private readonly Dictionary<Type, List<Delegate>> _handlers = new();
+    private readonly Dictionary<Guid, SessionTracker> _sessions = new();
+
+    private sealed class SessionTracker
+    {
+        public int LastNum;
+        public bool LastWasFromMe;
+    }
 
     public GamePigeonDispatcher()
     {
@@ -35,19 +42,30 @@ public sealed class GamePigeonDispatcher
     {
         if (!message.TryDecodeGamePigeon(out var envelope))
         {
-            Console.WriteLine("[Dispatcher] TryDecodeGamePigeon failed");
             return false;
         }
 
-        Console.WriteLine($"[Dispatcher] decoded envelope gameName={envelope.GameName} appId={envelope.AppId} appName={envelope.AppName}");
-
-        if (!_registry.TryParse(envelope, out var state, out var gameKey) || state is null)
+        if (!_registry.TryParse(envelope, out var rawState, out var gameKey) || rawState is not GamePigeonGameState state)
         {
             Console.WriteLine($"[Dispatcher] TryParse failed gameKey={gameKey}");
             return false;
         }
 
-        Console.WriteLine($"[Dispatcher] parsed state type={state.GetType().Name} hasHandlers={_handlers.ContainsKey(state.GetType())}");
+        if (state.SessionId is { } sessionId)
+        {
+            if (!_sessions.TryGetValue(sessionId, out var tracker))
+            {
+                tracker = new SessionTracker();
+                _sessions[sessionId] = tracker;
+            }
+
+            if (state.MessageNumber is { } num && num > tracker.LastNum)
+            {
+                tracker.LastNum = num;
+            }
+
+            tracker.LastWasFromMe = message.IsFromMe;
+        }
 
         if (_handlers.TryGetValue(state.GetType(), out var list))
         {
@@ -74,6 +92,22 @@ public sealed class GamePigeonDispatcher
             return false;
         }
 
+        if (state.SessionId is { } sessionId && _sessions.TryGetValue(sessionId, out var tracker))
+        {
+            var expectedNum = tracker.LastNum + 1;
+            if (state.MessageNumber != expectedNum)
+            {
+                Console.WriteLine($"[Dispatcher] refusing to send: session {sessionId} expected message num {expectedNum}, got {state.MessageNumber}");
+                return false;
+            }
+
+            if (state.TurnMode == GameTurnMode.Lockstep && tracker.LastWasFromMe)
+            {
+                Console.WriteLine($"[Dispatcher] refusing to send: session {sessionId} is not our turn");
+                return false;
+            }
+        }
+
         var fields = parser.ToFields(state);
         if (fields.GetValueOrDefault("player2") != playerUuid && !fields.ContainsKey("player1"))
         {
@@ -97,6 +131,23 @@ public sealed class GamePigeonDispatcher
             Fields: fields);
 
         await service.SendGamePigeonMessageAsync(chatIdentifier, envelope, fallbackText);
+
+        if (state.SessionId is { } sentSessionId)
+        {
+            if (!_sessions.TryGetValue(sentSessionId, out var sentTracker))
+            {
+                sentTracker = new SessionTracker();
+                _sessions[sentSessionId] = sentTracker;
+            }
+
+            if (state.MessageNumber is { } sentNum && sentNum > sentTracker.LastNum)
+            {
+                sentTracker.LastNum = sentNum;
+            }
+
+            sentTracker.LastWasFromMe = true;
+        }
+
         return true;
     }
 }
