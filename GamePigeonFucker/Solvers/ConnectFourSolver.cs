@@ -19,6 +19,12 @@ public sealed class ConnectFourSolver : IGameSolver
         if (!gamer.IsEnabled(Name))
             return;
 
+        if (!state.CanRespond(message.IsFromMe))
+        {
+            Console.WriteLine("[connect4] skipping: not eligible to respond to this message (not our turn)");
+            return;
+        }
+
         try
         {
             Console.WriteLine($"Got a connect 4 game: size={state.Size} boardLen={state.Board?.Count} board=[{(state.Board is null ? "" : string.Join(',', state.Board))}] lastMove={state.LastMove} winner={state.WinnerId} rawFields=[{string.Join(',', state.RawFields.Select(kv => $"{kv.Key}={kv.Value}"))}]");
