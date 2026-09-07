@@ -1,14 +1,16 @@
 namespace GamePigeon.Games;
 
-internal sealed record KnockoutState(
+public sealed record KnockoutState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Mode,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("knock", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("knock", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class KnockoutGame : GamePigeonGameParserBase<KnockoutState>
 {
@@ -23,6 +25,8 @@ internal sealed class KnockoutGame : GamePigeonGameParserBase<KnockoutState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("mode"),
             GamePigeonReplayCodec.Parse(fields.Get("replay")));
     }

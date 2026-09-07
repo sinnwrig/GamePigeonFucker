@@ -1,17 +1,19 @@
 namespace GamePigeon.Games;
 
-internal sealed record ConnectFourState(
+public sealed record ConnectFourState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Size,
     IReadOnlyList<int>? Board,
     (int Column, int Row, int Player)? LastMove,
     string? WinnerId,
     int? WinnerSlot)
-    : GamePigeonGameState("connect", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("connect", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourState>
 {
@@ -48,6 +50,8 @@ internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourStat
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("size"),
             board,
             lastMove,

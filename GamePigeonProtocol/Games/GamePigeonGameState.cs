@@ -1,12 +1,14 @@
 namespace GamePigeon.Games;
 
-internal abstract record GamePigeonGameState(
+public abstract record GamePigeonGameState(
     string GameKey,
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
-    IReadOnlyDictionary<string, string> RawFields);
+    IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName);
 
 internal static class GamePigeonFieldHelpers
 {

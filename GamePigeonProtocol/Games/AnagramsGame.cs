@@ -1,11 +1,13 @@
 namespace GamePigeon.Games;
 
-internal sealed record AnagramsState(
+public sealed record AnagramsState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     string? Letters,
     string? Language,
     int? Score1,
@@ -14,7 +16,7 @@ internal sealed record AnagramsState(
     int? Words2,
     IReadOnlyList<string> WordsList1,
     IReadOnlyList<string> WordsList2)
-    : GamePigeonGameState("anagrams", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("anagrams", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class AnagramsGame : GamePigeonGameParserBase<AnagramsState>
 {
@@ -29,6 +31,8 @@ internal sealed class AnagramsGame : GamePigeonGameParserBase<AnagramsState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.Get("letters"),
             fields.Get("lang"),
             fields.GetInt("score1"),

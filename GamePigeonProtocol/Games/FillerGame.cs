@@ -1,15 +1,17 @@
 namespace GamePigeon.Games;
 
-internal sealed record FillerState(
+public sealed record FillerState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Size,
     int? Seed,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("fill", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("fill", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class FillerGame : GamePigeonGameParserBase<FillerState>
 {
@@ -24,6 +26,8 @@ internal sealed class FillerGame : GamePigeonGameParserBase<FillerState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("size"),
             fields.GetInt("seed"),
             GamePigeonReplayCodec.Parse(fields.Get("replay")));

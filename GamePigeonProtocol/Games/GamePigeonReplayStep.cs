@@ -1,6 +1,6 @@
 namespace GamePigeon.Games;
 
-internal sealed record GamePigeonReplayStep(string Kind, string RawValue)
+public sealed record GamePigeonReplayStep(string Kind, string RawValue)
 {
     public IReadOnlyList<string> Values => RawValue.Split(',');
 

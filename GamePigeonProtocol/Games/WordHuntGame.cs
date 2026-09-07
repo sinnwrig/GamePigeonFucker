@@ -1,11 +1,13 @@
 namespace GamePigeon.Games;
 
-internal sealed record WordHuntState(
+public sealed record WordHuntState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     string? Letters,
     string? Language,
     int? Mode,
@@ -15,7 +17,7 @@ internal sealed record WordHuntState(
     int? Words2,
     IReadOnlyList<string> WordsList1,
     IReadOnlyList<string> WordsList2)
-    : GamePigeonGameState("hunt", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("hunt", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class WordHuntGame : GamePigeonGameParserBase<WordHuntState>
 {
@@ -30,6 +32,8 @@ internal sealed class WordHuntGame : GamePigeonGameParserBase<WordHuntState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.Get("letters"),
             fields.Get("lang"),
             fields.GetInt("mode"),

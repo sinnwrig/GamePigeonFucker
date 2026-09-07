@@ -1,16 +1,18 @@
 namespace GamePigeon.Games;
 
-internal sealed record WordBitesState(
+public sealed record WordBitesState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     string? Letters,
     string? Language,
     string? Level,
     string? Caption)
-    : GamePigeonGameState("wordbites", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("wordbites", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class WordBitesGame : GamePigeonGameParserBase<WordBitesState>
 {
@@ -25,6 +27,8 @@ internal sealed class WordBitesGame : GamePigeonGameParserBase<WordBitesState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.Get("letters"),
             fields.Get("lang"),
             fields.Get("level"),

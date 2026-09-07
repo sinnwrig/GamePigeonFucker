@@ -1,14 +1,16 @@
 namespace GamePigeon.Games;
 
-internal sealed record ArcheryState(
+public sealed record ArcheryState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Seed,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("archery", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("archery", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class ArcheryGame : GamePigeonGameParserBase<ArcheryState>
 {
@@ -23,6 +25,8 @@ internal sealed class ArcheryGame : GamePigeonGameParserBase<ArcheryState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("seed"),
             GamePigeonReplayCodec.Parse(fields.Get("replay")));
     }

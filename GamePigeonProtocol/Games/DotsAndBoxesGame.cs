@@ -1,14 +1,16 @@
 namespace GamePigeon.Games;
 
-internal sealed record DotsAndBoxesState(
+public sealed record DotsAndBoxesState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Size,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("dots", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("dots", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class DotsAndBoxesGame : GamePigeonGameParserBase<DotsAndBoxesState>
 {
@@ -23,6 +25,8 @@ internal sealed class DotsAndBoxesGame : GamePigeonGameParserBase<DotsAndBoxesSt
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("size"),
             GamePigeonReplayCodec.Parse(fields.Get("replay")));
     }

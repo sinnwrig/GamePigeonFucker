@@ -1,16 +1,18 @@
 namespace GamePigeon.Games;
 
-internal sealed record MiniGolfState(
+public sealed record MiniGolfState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Mode,
     int? Seed,
     IReadOnlyList<(double X, double Y)> Player1Shots,
     IReadOnlyList<(double X, double Y)> Player2Shots)
-    : GamePigeonGameState("golf", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("golf", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class MiniGolfGame : GamePigeonGameParserBase<MiniGolfState>
 {
@@ -25,6 +27,8 @@ internal sealed class MiniGolfGame : GamePigeonGameParserBase<MiniGolfState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("mode"),
             fields.GetInt("seed"),
             ParseShots(fields.Get("replay")),

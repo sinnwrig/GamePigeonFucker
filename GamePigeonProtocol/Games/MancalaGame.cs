@@ -1,15 +1,17 @@
 namespace GamePigeon.Games;
 
-internal sealed record MancalaState(
+public sealed record MancalaState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     int? Size,
     string? Mode,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("mancala", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("mancala", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class MancalaGame : GamePigeonGameParserBase<MancalaState>
 {
@@ -24,6 +26,8 @@ internal sealed class MancalaGame : GamePigeonGameParserBase<MancalaState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.GetInt("size"),
             fields.Get("mode"),
             GamePigeonReplayCodec.Parse(fields.Get("replay")));

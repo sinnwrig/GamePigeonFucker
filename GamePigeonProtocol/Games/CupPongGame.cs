@@ -1,11 +1,13 @@
 namespace GamePigeon.Games;
 
-internal sealed record CupPongState(
+public sealed record CupPongState(
     string? SessionSender,
     string? Player1Id,
     string? Player2Id,
     int? MessageNumber,
     IReadOnlyDictionary<string, string> RawFields,
+    Guid? SessionId,
+    string? GameName,
     string? Mode,
     int? Seed,
     int? Seed2,
@@ -13,7 +15,7 @@ internal sealed record CupPongState(
     int? Score1,
     int? Score2,
     IReadOnlyList<GamePigeonReplayStep> Replay)
-    : GamePigeonGameState("beer", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields);
+    : GamePigeonGameState("beer", SessionSender, Player1Id, Player2Id, MessageNumber, RawFields, SessionId, GameName);
 
 internal sealed class CupPongGame : GamePigeonGameParserBase<CupPongState>
 {
@@ -28,6 +30,8 @@ internal sealed class CupPongGame : GamePigeonGameParserBase<CupPongState>
             fields.Get("player2"),
             fields.GetInt("num"),
             fields,
+            envelope.SessionId,
+            envelope.GameName,
             fields.Get("mode"),
             fields.GetInt("seed"),
             fields.GetInt("seed2"),
