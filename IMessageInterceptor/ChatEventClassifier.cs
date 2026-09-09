@@ -7,9 +7,14 @@ internal sealed class ChatEventClassifier
     private readonly HashSet<string> _seenGuids = new();
     private readonly HashSet<string> _guidsWithPayload = new();
     private readonly HashSet<string> _guidsWithText = new();
+    private readonly EventDatabaseLogger _eventLogger = new(
+        Path.Combine(AppContext.BaseDirectory, "messages.raw.db"),
+        Path.Combine(AppContext.BaseDirectory, "messages.db"));
 
     public ChatEvent? Classify(JsonElement rawEvent)
     {
+        _eventLogger.LogRaw(rawEvent);
+
         if (!rawEvent.TryGetProperty("new", out var newElement))
         {
             return null;
@@ -28,16 +33,22 @@ internal sealed class ChatEventClassifier
         var chatIdentifier = GetString(rawEvent, "chatIdentifier");
         var chatGuid = GetString(rawEvent, "chatGuid");
 
-        return Classify(chatIdentifier, chatGuid, newMessage, oldMessage);
+        var chatEvent = Classify(chatIdentifier, chatGuid, newMessage, oldMessage);
+        if (chatEvent is not null)
+        {
+            _eventLogger.LogClassified(chatEvent);
+        }
+
+        return chatEvent;
     }
 
     internal ChatEvent? Classify(string? chatIdentifier, string? chatGuid, RawMessageSnapshot newMessage, RawMessageSnapshot? oldMessage)
     {
         var isFirstSeen = _seenGuids.Add(newMessage.Guid);
 
-        var hasPayloadNow = newMessage.BalloonBundleId is not null || newMessage.PayloadData is not null;
+        var hasPayloadData = newMessage.PayloadData is not null;
         var hadPayloadBefore = _guidsWithPayload.Contains(newMessage.Guid);
-        if (hasPayloadNow)
+        if (hasPayloadData)
         {
             _guidsWithPayload.Add(newMessage.Guid);
         }
@@ -49,8 +60,8 @@ internal sealed class ChatEventClassifier
             _guidsWithText.Add(newMessage.Guid);
         }
 
-        var hasReportableContent = hasTextNow || hasPayloadNow || newMessage.IsAssociatedMessage;
-        var gotNewContent = (hasPayloadNow && !hadPayloadBefore) || (hasTextNow && !hadTextBefore);
+        var hasReportableContent = hasTextNow || hasPayloadData || newMessage.BalloonBundleId is not null || newMessage.IsAssociatedMessage;
+        var gotNewContent = (hasPayloadData && !hadPayloadBefore) || (hasTextNow && !hadTextBefore);
 
         if (gotNewContent || (isFirstSeen && hasReportableContent))
         {
