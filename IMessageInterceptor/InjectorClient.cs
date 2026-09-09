@@ -33,7 +33,9 @@ internal sealed class InjectorClient
         string accountUniqueId,
         string recipientHandleId,
         string text,
-        string? senderIdentityId)
+        string? senderIdentityId,
+        string? balloonBundleId = null,
+        byte[]? payloadData = null)
     {
         var request = new
         {
@@ -42,6 +44,8 @@ internal sealed class InjectorClient
             recipientHandleID = recipientHandleId,
             senderIdentityID = senderIdentityId,
             text,
+            balloonBundleId,
+            payloadDataBase64 = payloadData is null ? null : Convert.ToBase64String(payloadData),
         };
 
         var root = await SendRequestAsync(request);

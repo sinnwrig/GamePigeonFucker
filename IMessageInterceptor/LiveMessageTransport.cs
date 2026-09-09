@@ -43,13 +43,13 @@ public class LiveMessageTransport : IMessageTransport
     {
         if (message.SenderAccountUniqueId is { Length: > 0 } accountUniqueId)
         {
-            if (message.RawPayload is not null || message.BalloonBundleId is not null)
-            {
-                throw new NotSupportedException(
-                    "sendViaAccount only supports plain text - balloon/payload sends must go through the default account");
-            }
-
-            return _injector.SendViaAccountAsync(accountUniqueId, chatIdentifier, message.Text, message.SenderIdentityId);
+            return _injector.SendViaAccountAsync(
+                accountUniqueId,
+                chatIdentifier,
+                message.Text,
+                message.SenderIdentityId,
+                message.BalloonBundleId,
+                message.RawPayload);
         }
 
         var chatGuid = BuildChatGuid(chatIdentifier);
