@@ -219,6 +219,12 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
     NSString *accountUniqueID = request[@"accountUniqueID"];
     NSString *recipientHandleID = request[@"recipientHandleID"];
     NSString *text = request[@"text"];
+    NSString *balloonBundleId = request[@"balloonBundleId"];
+    NSString *payloadBase64 = request[@"payloadDataBase64"];
+
+    NSData *payloadData = [payloadBase64 isKindOfClass:[NSString class]] && payloadBase64.length > 0
+        ? [[NSData alloc] initWithBase64EncodedString:payloadBase64 options:0]
+        : nil;
 
     __block NSDictionary *response = nil;
     dispatch_sync(dispatch_get_main_queue(), ^{
@@ -293,8 +299,8 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
                                                            error:nil
                                                             guid:nil
                                                          subject:nil
-                                                 balloonBundleID:nil
-                                                     payloadData:nil
+                                                 balloonBundleID:[balloonBundleId isKindOfClass:[NSString class]] && balloonBundleId.length > 0 ? balloonBundleId : nil
+                                                     payloadData:payloadData
                                           expressiveSendStyleID:nil
                                                 threadIdentifier:nil];
         if (!message) {
