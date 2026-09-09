@@ -18,9 +18,53 @@ public sealed record ConnectFourState(
     public override GameTurnMode TurnMode => GameTurnMode.Lockstep;
 }
 
-internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourState>
+/// <summary>A solver's raw contribution to a Connect Four game: the column it chose to drop into.</summary>
+public sealed record ConnectFourMove(int Column);
+
+internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourState>, IGamePigeonMoveHandler<ConnectFourState, ConnectFourMove>
 {
+    public const int DefaultColumns = 7;
+    public const int DefaultRows = 6;
+
     public override string GameKey => "connect";
+
+    /// <summary>
+    /// Connect Four is Lockstep, so player1/player2 identity is already resolved generically
+    /// by the dispatcher; what belongs here is the board rule the bot shouldn't have to
+    /// re-derive itself: which row gravity drops the piece into and whose turn comes next.
+    /// </summary>
+    public ConnectFourState ApplyMove(ConnectFourState state, string playerUuid, ConnectFourMove move)
+    {
+        var columns = state.Size ?? DefaultColumns;
+        var board = state.Board?.ToArray() ?? new int[DefaultRows * columns];
+        var rows = board.Length / columns;
+
+        var row = -1;
+        for (var candidate = rows - 1; candidate >= 0; candidate--)
+        {
+            if (board[candidate * columns + move.Column] == 0)
+            {
+                row = candidate;
+                break;
+            }
+        }
+
+        if (row < 0)
+        {
+            throw new InvalidOperationException($"Column {move.Column} is full");
+        }
+
+        var nextPlayer = state.LastMove is { Player: var lastPlayer } ? (lastPlayer == 1 ? 2 : 1) : 1;
+        board[row * columns + move.Column] = nextPlayer;
+
+        return state with
+        {
+            Size = columns,
+            Board = board,
+            LastMove = (move.Column, row, nextPlayer),
+            MessageNumber = (state.MessageNumber ?? 0) + 1,
+        };
+    }
 
     public override ConnectFourState Parse(GamePigeonEnvelope envelope)
     {
