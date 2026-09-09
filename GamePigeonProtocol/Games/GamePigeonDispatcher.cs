@@ -1,3 +1,4 @@
+using System.Reflection;
 using GamePigeon;
 using IMessage;
 
@@ -5,6 +6,15 @@ namespace GamePigeon.Games;
 
 public sealed class GamePigeonDispatcher
 {
+    private static readonly Lazy<byte[]> Icon = new(() =>
+    {
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WordHuntIcon.jpg")
+            ?? throw new FileNotFoundException("Embedded resource not found: WordHuntIcon.jpg");
+        using MemoryStream memory = new();
+        stream.CopyTo(memory);
+        return memory.ToArray();
+    });
+
     private readonly GamePigeonGameRegistry _registry;
     private readonly Dictionary<Type, List<Delegate>> _handlers = new();
     private readonly Dictionary<Guid, SessionTracker> _sessions = new();
@@ -105,8 +115,7 @@ public sealed class GamePigeonDispatcher
         string chatIdentifier,
         string playerUuid,
         string? playerAvatar = null,
-        string? fallbackText = null,
-        byte[]? thumbnail = null)
+        string? fallbackText = null)
         where TState : GamePigeonGameState
     {
         if (_registry.FindParser(state.GameKey) is not IGamePigeonMoveHandler<TState, TMove> handler)
@@ -116,7 +125,7 @@ public sealed class GamePigeonDispatcher
         }
 
         var nextState = handler.ApplyMove(state, playerUuid, move);
-        return SendMoveAsync(nextState, service, chatIdentifier, playerUuid, playerAvatar, fallbackText, thumbnail);
+        return SendMoveAsync(nextState, service, chatIdentifier, playerUuid, playerAvatar, fallbackText);
     }
 
     public async Task<bool> SendMoveAsync<TState>(
@@ -125,8 +134,7 @@ public sealed class GamePigeonDispatcher
         string chatIdentifier,
         string playerUuid,
         string? playerAvatar = null,
-        string? fallbackText = null,
-        byte[]? thumbnail = null)
+        string? fallbackText = null)
         where TState : GamePigeonGameState
     {
         if (_registry.FindParser(state.GameKey) is not IGamePigeonGameParser<TState> parser)
@@ -180,7 +188,7 @@ public sealed class GamePigeonDispatcher
             SessionId: state.SessionId,
             AppName: null,
             AppId: null,
-            Thumbnail: thumbnail,
+            Thumbnail: Icon.Value,
             DecodedQuery: GamePigeonQueryCodec.BuildQuery(fields),
             Fields: fields);
 

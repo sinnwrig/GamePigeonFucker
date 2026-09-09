@@ -10,4 +10,8 @@
     <ProjectReference Include="..\IMessageInterceptor\IMessageInterceptor.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="WordHuntIcon.jpg" LogicalName="WordHuntIcon.jpg" />
+  </ItemGroup>
+
 </Project>
