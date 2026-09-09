@@ -21,6 +21,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Solvers\Collins Scrabble Words (2019).txt" LogicalName="CollinsScrabbleWords2019.txt" />
     <EmbeddedResource Include="Commands\Fonts\Larry3D.flf" LogicalName="Larry3D.flf" />
+    <EmbeddedResource Include="Solvers\WordHuntIcon.jpg" LogicalName="WordHuntIcon.jpg" />
   </ItemGroup>
 
   <ItemGroup>
