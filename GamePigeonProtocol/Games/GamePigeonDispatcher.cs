@@ -8,8 +8,8 @@ public sealed class GamePigeonDispatcher
 {
     private static readonly Lazy<byte[]> Icon = new(() =>
     {
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("WordHuntIcon.jpg")
-            ?? throw new FileNotFoundException("Embedded resource not found: WordHuntIcon.jpg");
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("GamePigeonIcon.jpg")
+            ?? throw new FileNotFoundException("Embedded resource not found: GamePigeonIcon.jpg");
         using MemoryStream memory = new();
         stream.CopyTo(memory);
         return memory.ToArray();

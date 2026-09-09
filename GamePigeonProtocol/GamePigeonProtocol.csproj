@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="WordHuntIcon.jpg" LogicalName="WordHuntIcon.jpg" />
+    <EmbeddedResource Include="GamePigeonIcon.jpg" LogicalName="GamePigeonIcon.jpg" />
   </ItemGroup>
 
 </Project>
