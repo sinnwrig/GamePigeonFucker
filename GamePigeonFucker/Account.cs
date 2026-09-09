@@ -13,6 +13,9 @@ public static class Account
     {
         ActiveAccountInfo = account;
         ActiveAlias = alias;
+
+        MessagingService.DefaultSenderAccountUniqueId = account?.UniqueId;
+        MessagingService.DefaultSenderIdentityId = alias;
     }
 
 
