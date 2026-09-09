@@ -29,9 +29,6 @@ public abstract record GamePigeonGameState(
 
     public virtual bool IsOpenInvite => false;
 
-    public bool CanRespond(bool messageIsFromMe) =>
-        !messageIsFromMe || (TurnMode == GameTurnMode.FreeForAll && IsOpenInvite);
-
     public GamePigeonPlayerSlot GetPlayerSlot(string playerUuid) => Player1Id == playerUuid
         ? GamePigeonPlayerSlot.Player1
         : Player2Id == playerUuid

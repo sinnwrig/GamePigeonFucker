@@ -42,6 +42,7 @@ internal static class GamePigeonEnvelopeCodec
         AddEntry("layoutClass", builder.AddString(LayoutClass));
         AddEntry("ldtext", builder.AddString(envelope.GameName ?? string.Empty));
         AddEntry("sessionIdentifier", builder.AddUuid(envelope.SessionId ?? Guid.NewGuid()));
+        AddEntry("liveLayoutInfo", builder.AddData(BuildLiveLayoutInfo()));
 
         if (envelope.UserInfo.Count > 0)
         {
@@ -61,6 +62,20 @@ internal static class GamePigeonEnvelopeCodec
         {
             AddEntry("ai", builder.AddData(thumbnail));
         }
+
+        var rootUid = builder.AddDictionary("NSDictionary", ["NSDictionary", "NSObject"], entries);
+        return builder.Build(rootUid);
+    }
+
+    private static byte[] BuildLiveLayoutInfo()
+    {
+        var builder = new NSKeyedArchiveEncoder();
+        var userInfoUid = builder.AddDictionary("NSDictionary", ["NSDictionary", "NSObject"], []);
+        var entries = new List<(BplistUid Key, BplistUid Value)>
+        {
+            (builder.AddString("layoutClass"), builder.AddString("MSMessageLiveLayout")),
+            (builder.AddString("userInfo"), userInfoUid),
+        };
 
         var rootUid = builder.AddDictionary("NSDictionary", ["NSDictionary", "NSObject"], entries);
         return builder.Build(rootUid);

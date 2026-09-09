@@ -13,6 +13,7 @@ public sealed class GamePigeonDispatcher
     {
         public int LastNum;
         public bool LastWasFromMe;
+        public int LastRespondedNum = -1;
     }
 
     public GamePigeonDispatcher()
@@ -78,13 +79,54 @@ public sealed class GamePigeonDispatcher
         return true;
     }
 
+    public bool CanRespond(GamePigeonGameState state, bool messageIsFromMe)
+    {
+        if (state.SessionId is { } dedupSessionId
+            && _sessions.TryGetValue(dedupSessionId, out var dedupTracker)
+            && state.MessageNumber is { } incomingNum
+            && incomingNum <= dedupTracker.LastRespondedNum)
+        {
+            return false;
+        }
+
+        return !messageIsFromMe;
+    }
+
+    /// <summary>
+    /// The entry point solvers should use: hand over the raw move you decided to make (words
+    /// found, column chosen, etc.) and the protocol resolves player identity, slot assignment,
+    /// winner determination, and message sequencing before sending. Solvers never construct a
+    /// next <typeparamref name="TState"/> by hand.
+    /// </summary>
+    public Task<bool> SendMoveAsync<TState, TMove>(
+        TState state,
+        TMove move,
+        MessagingService service,
+        string chatIdentifier,
+        string playerUuid,
+        string? playerAvatar = null,
+        string? fallbackText = null,
+        byte[]? thumbnail = null)
+        where TState : GamePigeonGameState
+    {
+        if (_registry.FindParser(state.GameKey) is not IGamePigeonMoveHandler<TState, TMove> handler)
+        {
+            Console.WriteLine($"[Dispatcher] no move handler for gameKey={state.GameKey}");
+            return Task.FromResult(false);
+        }
+
+        var nextState = handler.ApplyMove(state, playerUuid, move);
+        return SendMoveAsync(nextState, service, chatIdentifier, playerUuid, playerAvatar, fallbackText, thumbnail);
+    }
+
     public async Task<bool> SendMoveAsync<TState>(
         TState state,
         MessagingService service,
         string chatIdentifier,
         string playerUuid,
         string? playerAvatar = null,
-        string? fallbackText = null)
+        string? fallbackText = null,
+        byte[]? thumbnail = null)
         where TState : GamePigeonGameState
     {
         if (_registry.FindParser(state.GameKey) is not IGamePigeonGameParser<TState> parser)
@@ -109,7 +151,8 @@ public sealed class GamePigeonDispatcher
         }
 
         var fields = parser.ToFields(state);
-        if (fields.GetValueOrDefault("player2") != playerUuid && !fields.ContainsKey("player1"))
+        if (state.TurnMode == GameTurnMode.Lockstep
+            && fields.GetValueOrDefault("player2") != playerUuid && !fields.ContainsKey("player1"))
         {
             var claimed = new Dictionary<string, string>(fields) { ["player1"] = playerUuid };
             if (!string.IsNullOrEmpty(playerAvatar))
@@ -120,13 +163,24 @@ public sealed class GamePigeonDispatcher
             fields = claimed;
         }
 
+        var caption = fallbackText ?? state.GameName ?? string.Empty;
+        var userInfo = new Dictionary<string, string>
+        {
+            ["image-title"] = string.Empty,
+            ["caption"] = caption,
+            ["image-subtitle"] = string.Empty,
+            ["subcaption"] = string.Empty,
+            ["tertiary-subcaption"] = string.Empty,
+            ["secondary-subcaption"] = string.Empty,
+        };
+
         var envelope = new GamePigeonEnvelope(
             GameName: state.GameName,
-            UserInfo: new Dictionary<string, string>(),
+            UserInfo: userInfo,
             SessionId: state.SessionId,
             AppName: null,
             AppId: null,
-            Thumbnail: null,
+            Thumbnail: thumbnail,
             DecodedQuery: GamePigeonQueryCodec.BuildQuery(fields),
             Fields: fields);
 
@@ -140,9 +194,17 @@ public sealed class GamePigeonDispatcher
                 _sessions[sentSessionId] = sentTracker;
             }
 
-            if (state.MessageNumber is { } sentNum && sentNum > sentTracker.LastNum)
+            if (state.MessageNumber is { } sentNum)
             {
-                sentTracker.LastNum = sentNum;
+                if (sentNum > sentTracker.LastNum)
+                {
+                    sentTracker.LastNum = sentNum;
+                }
+
+                if (sentNum > sentTracker.LastRespondedNum)
+                {
+                    sentTracker.LastRespondedNum = sentNum;
+                }
             }
 
             sentTracker.LastWasFromMe = true;
