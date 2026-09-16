@@ -221,6 +221,7 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
     NSString *text = request[@"text"];
     NSString *balloonBundleId = request[@"balloonBundleId"];
     NSString *payloadBase64 = request[@"payloadDataBase64"];
+    NSString *associatedMessageGuid = request[@"associatedMessageGuid"];
 
     NSData *payloadData = [payloadBase64 isKindOfClass:[NSString class]] && payloadBase64.length > 0
         ? [[NSData alloc] initWithBase64EncodedString:payloadBase64 options:0]
@@ -321,11 +322,28 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
             return;
         }
 
+        id associatedError = [NSNull null];
+        if ([associatedMessageGuid isKindOfClass:[NSString class]] && associatedMessageGuid.length > 0) {
+            @try {
+                // Balloon update: real GamePigeon moves are associated messages (type 2)
+                // pointing at the game invite's message guid, so iOS updates the existing
+                // balloon in place instead of dropping a standalone duplicate session.
+                [message setValue:associatedMessageGuid forKey:@"associatedMessageGUID"];
+                [message setValue:@(2) forKey:@"associatedMessageType"];
+            } @catch (NSException *e) {
+                associatedError = e.reason ?: @"unknown";
+            }
+        }
+
         [chat sendMessage:message];
+        id sentGuid = nil;
+        @try { sentGuid = [message valueForKey:@"guid"]; } @catch (NSException *e) {}
         response = @{
             @"ok": @YES,
             @"chatDescription": [chat description] ?: @"?",
             @"senderIdentityID": senderIdentityID ?: [NSNull null],
+            @"messageGuid": sentGuid ?: [NSNull null],
+            @"associatedMessageError": associatedError,
         };
     });
     return response;
@@ -359,6 +377,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
     NSString *balloonBundleId = request[@"balloonBundleId"];
     NSString *payloadBase64 = request[@"payloadDataBase64"];
     NSString *senderHandle = request[@"senderHandle"];
+    NSString *associatedMessageGuid = request[@"associatedMessageGuid"];
 
     NSData *payloadData = [payloadBase64 isKindOfClass:[NSString class]] && payloadBase64.length > 0
         ? [[NSData alloc] initWithBase64EncodedString:payloadBase64 options:0]
@@ -395,8 +414,25 @@ static NSDictionary *HandleRequest(NSDictionary *request)
             return;
         }
 
+        id associatedError = [NSNull null];
+        if ([associatedMessageGuid isKindOfClass:[NSString class]] && associatedMessageGuid.length > 0) {
+            @try {
+                // Balloon update: see HandleSendViaAccount.
+                [message setValue:associatedMessageGuid forKey:@"associatedMessageGUID"];
+                [message setValue:@(2) forKey:@"associatedMessageType"];
+            } @catch (NSException *e) {
+                associatedError = e.reason ?: @"unknown";
+            }
+        }
+
         [chat sendMessage:message];
-        response = @{ @"ok": @YES };
+        id sentGuid = nil;
+        @try { sentGuid = [message valueForKey:@"guid"]; } @catch (NSException *e) {}
+        response = @{
+            @"ok": @YES,
+            @"messageGuid": sentGuid ?: [NSNull null],
+            @"associatedMessageError": associatedError,
+        };
     });
 
     return response;
@@ -580,6 +616,7 @@ static NSDictionary *BuildMessageDict(id message)
     @try { d[@"hasEditedParts"] = @([[message valueForKey:@"hasEditedParts"] boolValue]); } @catch (NSException *e) { d[@"hasEditedParts"] = @NO; }
     @try { d[@"dateEditedSeconds"] = @(SecondsSinceMacEpoch([message valueForKey:@"dateEdited"])); } @catch (NSException *e) { d[@"dateEditedSeconds"] = @0; }
     @try { d[@"hasRetractedParts"] = @([[message valueForKey:@"hasRetractedParts"] boolValue]); } @catch (NSException *e) { d[@"hasRetractedParts"] = @NO; }
+    @try { d[@"flags"] = ValueOrNull([message valueForKey:@"flags"]); } @catch (NSException *e) {}
 
     return d;
 }
