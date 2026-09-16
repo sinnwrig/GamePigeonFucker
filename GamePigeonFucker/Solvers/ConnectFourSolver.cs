@@ -19,10 +19,17 @@ public sealed class ConnectFourSolver : IGameSolver
         if (!gamer.IsEnabled(Name))
             return;
 
-        if (!state.CanRespond(message.IsFromMe))
+        if (!gamer.Dispatcher.CanRespond(state, message.IsFromMe))
         {
             Console.WriteLine("[connect4] skipping: not eligible to respond to this message (not our turn)");
             return;
+        }
+
+        if (message.IsFromMe && !await gamer.WaitForDeliveryAsync(message.Guid, TimeSpan.FromSeconds(30)))
+        {
+            // Balloon updates to a still-in-flight own message fall back to RCS/SMS and
+            // lose the balloon; give up waiting after 30s rather than never respond.
+            Console.WriteLine("[connect4] own invite delivery not confirmed after 30s; sending anyway");
         }
 
         try
@@ -37,26 +44,16 @@ public sealed class ConnectFourSolver : IGameSolver
 
             var board = state.Board?.ToArray() ?? new int[Rows * Columns];
 
-            var move = FindOpenColumn(board, Columns);
-            if (move is not { } chosen)
+            var column = FindOpenColumn(board, Columns);
+            if (column is not { } chosenColumn)
             {
                 Console.WriteLine("[connect4] skipping: board is full");
                 return;
             }
 
-            var nextPlayer = state.LastMove is { Player: var lastPlayer } ? (lastPlayer == 1 ? 2 : 1) : 1;
-            board[chosen.Row * Columns + chosen.Column] = nextPlayer;
-
-            var nextState = state with
-            {
-                Size = Columns,
-                Board = board,
-                LastMove = (chosen.Column, chosen.Row, nextPlayer),
-                MessageNumber = (state.MessageNumber ?? 0) + 1,
-            };
-
-            Console.WriteLine($"[connect4] sending move column={chosen.Column} row={chosen.Row} player={nextPlayer} to {message.ChatIdentifier}");
-            var sent = await gamer.Dispatcher.SendMoveAsync(nextState, service, message.ChatIdentifier, gamer.PlayerUuid, gamer.PlayerAvatar, "Connect Four move");
+            Console.WriteLine($"[connect4] sending move column={chosenColumn} to {message.ChatIdentifier}");
+            var move = new ConnectFourMove(chosenColumn);
+            var sent = await gamer.Dispatcher.SendMoveAsync(state, move, service, message.ChatIdentifier, gamer.PlayerUuid, gamer.PlayerAvatar, "Connect Four move");
             Console.WriteLine($"[connect4] move sent={sent}");
         }
         catch (Exception ex)
@@ -65,17 +62,13 @@ public sealed class ConnectFourSolver : IGameSolver
         }
     }
 
-    private static (int Column, int Row)? FindOpenColumn(IReadOnlyList<int> board, int size)
+    private static int? FindOpenColumn(IReadOnlyList<int> board, int size)
     {
-        var rows = board.Count / size;
         for (var column = 0; column < size; column++)
         {
-            for (var row = rows - 1; row >= 0; row--)
+            if (board[column] == 0)
             {
-                if (board[row * size + column] == 0)
-                {
-                    return (column, row);
-                }
+                return column;
             }
         }
 

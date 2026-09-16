@@ -7,6 +7,7 @@ public sealed class WordHuntSolver : IGameSolver
     public string Name => "hunt";
 
     private const int GridSize = 4;
+    private static readonly TimeSpan ResponseDelay = TimeSpan.FromSeconds(5);
 
     private static readonly Lazy<WordDefinitions> Definitions = new(() =>
         WordDefinitions.LoadFromEmbeddedResource("CollinsScrabbleWords2019.txt", GridSize * GridSize));
@@ -21,10 +22,18 @@ public sealed class WordHuntSolver : IGameSolver
         if (!gamer.IsEnabled(Name))
             return;
 
-        if (!state.CanRespond(message.IsFromMe))
+        if (!gamer.Dispatcher.CanRespond(state, message.IsFromMe))
         {
             Console.WriteLine("[hunt] skipping: not eligible to respond to this message (already-answered outgoing move)");
             return;
+        }
+
+        if (message.IsFromMe && !await gamer.WaitForDeliveryAsync(message.Guid, TimeSpan.FromSeconds(30)))
+        {
+            // Answering our own invite sends a balloon update to it; if the invite's own
+            // send is still in-flight, the update falls back to RCS/SMS and the balloon
+            // is lost. Give up waiting after 30s rather than never respond.
+            Console.WriteLine("[hunt] own invite delivery not confirmed after 30s; sending anyway");
         }
 
         try
@@ -32,7 +41,7 @@ public sealed class WordHuntSolver : IGameSolver
             Console.WriteLine($"[hunt] message: guid={message.Guid} chat={message.ChatIdentifier} handle={message.HandleId} isFromMe={message.IsFromMe} balloon={message.BalloonBundleId} payloadLen={message.PayloadData?.Length} text=\"{message.Text}\"");
             Console.WriteLine($"[hunt] state: sessionSender={state.SessionSender} sessionId={state.SessionId} gameName={state.GameName} player1={state.Player1Id} player2={state.Player2Id} num={state.MessageNumber} letters={state.Letters} lang={state.Language} mode={state.Mode} score1={state.Score1} score2={state.Score2} words1={state.Words1} words2={state.Words2} wordsList1Count={state.WordsList1.Count} wordsList2Count={state.WordsList2.Count}");
             Console.WriteLine($"[hunt] rawFields=[{string.Join(',', state.RawFields.Select(kv => $"{kv.Key}={kv.Value}"))}]");
-            Console.WriteLine($"[hunt] isOpenInvite={state.IsOpenInvite} turnMode={state.TurnMode} canRespond={state.CanRespond(message.IsFromMe)} playerSlot={state.GetPlayerSlot(gamer.PlayerUuid)}");
+            Console.WriteLine($"[hunt] isOpenInvite={state.IsOpenInvite} turnMode={state.TurnMode} playerSlot={state.GetPlayerSlot(gamer.PlayerUuid)}");
 
             if (gamer.Service is not { } service)
             {
@@ -55,14 +64,12 @@ public sealed class WordHuntSolver : IGameSolver
             List<string> words = solver.FindAllWords().OrderByDescending(w => w.Length).ThenBy(w => w).ToList();
             int score = words.Sum(ScoreWord);
 
-            bool weArePlayer1 = state.GetPlayerSlot(gamer.PlayerUuid) == GamePigeonPlayerSlot.Player1;
-
-            WordHuntState nextState = weArePlayer1
-                ? state with { WordsList1 = words, Words1 = words.Count, Score1 = score, MessageNumber = (state.MessageNumber ?? 0) + 1 }
-                : state with { Player2Id = gamer.PlayerUuid, WordsList2 = words, Words2 = words.Count, Score2 = score, MessageNumber = (state.MessageNumber ?? 0) + 1 };
+            // await service.SendMessageAsync(message.ChatIdentifier, new OutboundMessage("Hacking your game pigeon..."));
+            await Task.Delay(ResponseDelay);
 
             Console.WriteLine($"[hunt] sending {words.Count} words (score={score}) to {message.ChatIdentifier}");
-            var sent = await gamer.Dispatcher.SendMoveAsync(nextState, service, message.ChatIdentifier, gamer.PlayerUuid, gamer.PlayerAvatar, $"Found {words.Count} words");
+            var move = new WordHuntMove(words, score);
+            var sent = await gamer.Dispatcher.SendMoveAsync(state, move, service, message.ChatIdentifier, gamer.PlayerUuid, gamer.PlayerAvatar, $"Found {words.Count} words");
             Console.WriteLine($"[hunt] move sent={sent}");
         }
         catch (Exception ex)
