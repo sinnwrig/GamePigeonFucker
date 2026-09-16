@@ -116,7 +116,8 @@ import sys
 binary_path, dylib_path = sys.argv[1], sys.argv[2]
 fat = lief.MachO.parse(binary_path)
 for binary in fat:
-    binary.add_library(dylib_path)
+    if not any(isinstance(c, lief.MachO.DylibCommand) and c.name == dylib_path for c in binary.commands):
+        binary.add_library(dylib_path)
 fat.write(binary_path)
 PYEOF
 
