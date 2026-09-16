@@ -32,10 +32,14 @@ internal static class GamePigeonMessagingExtensions
         this MessagingService service,
         string chatIdentifier,
         GamePigeonEnvelope envelope,
-        string? fallbackText = null)
+        string? fallbackText = null,
+        string? associatedMessageGuid = null)
     {
         var payload = GamePigeonEnvelopeCodec.Encode(envelope);
-        var text = fallbackText ?? envelope.GameName ?? "GamePigeon message";
-        return service.SendMessageAsync(chatIdentifier, new OutboundMessage(text, payload, GamePigeonBalloonBundleId));
+
+        // Real balloon messages never carry visible body text: moves use U+FFFC, invites carry an empty body.
+        var text = envelope.Fields.ContainsKey("start") ? "" : "\uFFFC";
+        return service.SendMessageAsync(chatIdentifier,
+            new OutboundMessage(text, payload, GamePigeonBalloonBundleId, AssociatedMessageGuid: associatedMessageGuid));
     }
 }
