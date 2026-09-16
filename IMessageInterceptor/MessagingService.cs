@@ -14,8 +14,26 @@ public sealed class MessagingService
 
     public event Action<InboundMessage>? OnReceiveMessage;
 
+    /// <summary>Delivery-status updates for outgoing messages (invites' sends settle here).</summary>
+    public event Action<DeliveryStatusEvent>? OnDeliveryStatus;
+
+    // Single subscription: two concurrent watches on one transport would each run the
+    // shared classifier and dedupe each other, so everything is mapped from one watch.
     public Task StartAsync(CancellationToken cancellationToken) =>
-        _transport.WatchAsync(message => OnReceiveMessage?.Invoke(message), cancellationToken);
+        _transport.WatchEventsAsync(chatEvent =>
+        {
+            switch (chatEvent)
+            {
+                case NewMessageEvent m:
+                    OnReceiveMessage?.Invoke(new InboundMessage(
+                        m.MessageGuid, m.ChatIdentifier ?? "", m.SenderHandleId ?? "", m.Text ?? "",
+                        m.BalloonBundleId ?? "", m.PayloadData, new DateTimeOffset(m.Timestamp, TimeSpan.Zero), m.IsFromMe));
+                    break;
+                case DeliveryStatusEvent d:
+                    OnDeliveryStatus?.Invoke(d);
+                    break;
+            }
+        }, cancellationToken);
 
     public Task SendMessageAsync(string chatIdentifier, OutboundMessage message)
     {
