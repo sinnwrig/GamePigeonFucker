@@ -33,7 +33,7 @@ internal sealed class ConnectFourGame : GamePigeonGameParserBase<ConnectFourStat
     /// by the dispatcher; what belongs here is the board rule the bot shouldn't have to
     /// re-derive itself: which row gravity drops the piece into and whose turn comes next.
     /// </summary>
-    public ConnectFourState ApplyMove(ConnectFourState state, string playerUuid, ConnectFourMove move)
+    public ConnectFourState ApplyMove(ConnectFourState state, string playerUuid, string? playerAvatar, ConnectFourMove move)
     {
         var columns = state.Size ?? DefaultColumns;
         var board = state.Board?.ToArray() ?? new int[DefaultRows * columns];
