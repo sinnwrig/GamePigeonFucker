@@ -337,9 +337,9 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
                 [message setValue:associatedMessageGuid forKey:@"associatedMessageGUID"];
                 [message setValue:@(2) forKey:@"associatedMessageType"];
                 // Real clients anchor the association to the ENTIRE message
-                // (range {0, NSUIntegerMax}); leaving the default {0,0} makes the
-                // association bind to a zero-length span - the session state still
-                // updates but the live balloon view fails to build (generic card).
+                // (range {0, NSUIntegerMax}); keep the ivar diff against real
+                // messages clean by setting it too (root cause of the generic
+                // card was query escaping — this just matches real bytes).
                 NSRange fullRange = NSMakeRange(0, NSUIntegerMax);
                 [message setValue:[NSValue valueWithRange:fullRange] forKey:@"associatedMessageRange"];
             } @catch (NSException *e) {
