@@ -39,10 +39,7 @@ internal static class GamePigeonEnvelopeCodec
 
         void AddEntry(string key, BplistUid value) => entries.Add((builder.AddString(key), value));
 
-        // Entry order matches real GamePigeon payloads (ai, URL, ldtext, layoutClass,
-        // an, sessionIdentifier, userInfo, appid, liveLayoutInfo) — the receiving
-        // extension renders the live game view only for payloads that match the
-        // genuine client's archive layout (see FINDINGS.md 2.4).
+        // Entry order mirrors real payloads to keep byte diffs useful. Order doesn't really matter too much unless you're debugging.
         AddEntry("ai", builder.AddData(envelope.Thumbnail is { Length: > 0 } t ? t : []));
         AddEntry("URL", builder.AddUrl(GamePigeonQueryCodec.EncodeDataUrl(envelope.DecodedQuery)));
         AddEntry("ldtext", builder.AddString(envelope.GameName ?? string.Empty));
