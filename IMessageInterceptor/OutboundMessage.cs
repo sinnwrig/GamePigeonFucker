@@ -5,4 +5,5 @@ public sealed record OutboundMessage(
     byte[]? RawPayload = null,
     string? BalloonBundleId = null,
     string? SenderAccountUniqueId = null,
-    string? SenderIdentityId = null);
+    string? SenderIdentityId = null,
+    string? AssociatedMessageGuid = null);

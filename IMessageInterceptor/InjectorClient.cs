@@ -15,7 +15,7 @@ internal sealed class InjectorClient
         _socketPath = socketPath ?? DefaultSocketPath;
     }
 
-    public async Task SendAsync(string chatGuid, string text, string? balloonBundleId, byte[]? payloadData)
+    public async Task SendAsync(string chatGuid, string text, string? balloonBundleId, byte[]? payloadData, string? associatedMessageGuid = null)
     {
         var request = new
         {
@@ -23,6 +23,7 @@ internal sealed class InjectorClient
             text,
             balloonBundleId,
             payloadDataBase64 = payloadData is null ? null : Convert.ToBase64String(payloadData),
+            associatedMessageGuid,
         };
 
         var root = await SendRequestAsync(request);
@@ -35,7 +36,8 @@ internal sealed class InjectorClient
         string text,
         string? senderIdentityId,
         string? balloonBundleId = null,
-        byte[]? payloadData = null)
+        byte[]? payloadData = null,
+        string? associatedMessageGuid = null)
     {
         var request = new
         {
@@ -46,6 +48,7 @@ internal sealed class InjectorClient
             text,
             balloonBundleId,
             payloadDataBase64 = payloadData is null ? null : Convert.ToBase64String(payloadData),
+            associatedMessageGuid,
         };
 
         var root = await SendRequestAsync(request);

@@ -49,11 +49,12 @@ public class LiveMessageTransport : IMessageTransport
                 message.Text,
                 message.SenderIdentityId,
                 message.BalloonBundleId,
-                message.RawPayload);
+                message.RawPayload,
+                message.AssociatedMessageGuid);
         }
 
         var chatGuid = BuildChatGuid(chatIdentifier);
-        return _injector.SendAsync(chatGuid, message.Text, message.BalloonBundleId, message.RawPayload);
+        return _injector.SendAsync(chatGuid, message.Text, message.BalloonBundleId, message.RawPayload, message.AssociatedMessageGuid);
     }
 
     public Task<IReadOnlyList<ImAccountInfo>> ListAccountsAsync() => _injector.ListAccountsAsync();
