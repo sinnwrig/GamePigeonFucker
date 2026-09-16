@@ -336,6 +336,12 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
                 // balloon in place instead of dropping a standalone duplicate session.
                 [message setValue:associatedMessageGuid forKey:@"associatedMessageGUID"];
                 [message setValue:@(2) forKey:@"associatedMessageType"];
+                // Real clients anchor the association to the ENTIRE message
+                // (range {0, NSUIntegerMax}); leaving the default {0,0} makes the
+                // association bind to a zero-length span - the session state still
+                // updates but the live balloon view fails to build (generic card).
+                NSRange fullRange = NSMakeRange(0, NSUIntegerMax);
+                [message setValue:[NSValue valueWithRange:fullRange] forKey:@"associatedMessageRange"];
             } @catch (NSException *e) {
                 associatedError = e.reason ?: @"unknown";
             }
@@ -401,6 +407,7 @@ static NSDictionary *HandleRequest(NSDictionary *request)
 
         NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
 
+
         IMMessage *message = [[IMMessage alloc] initWithSender:([senderHandle isKindOfClass:[NSString class]] && senderHandle.length > 0 ? senderHandle : nil)
                                                             time:nil
                                                             text:attributedText
@@ -426,6 +433,9 @@ static NSDictionary *HandleRequest(NSDictionary *request)
                 // Balloon update: see HandleSendViaAccount.
                 [message setValue:associatedMessageGuid forKey:@"associatedMessageGUID"];
                 [message setValue:@(2) forKey:@"associatedMessageType"];
+                // Anchor to the entire message - see HandleSendViaAccount comment.
+                NSRange fullRange = NSMakeRange(0, NSUIntegerMax);
+                [message setValue:[NSValue valueWithRange:fullRange] forKey:@"associatedMessageRange"];
             } @catch (NSException *e) {
                 associatedError = e.reason ?: @"unknown";
             }
