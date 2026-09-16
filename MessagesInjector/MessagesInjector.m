@@ -660,51 +660,6 @@ static NSDictionary *BuildMessageDict(id message)
     @try { d[@"hasRetractedParts"] = @([[message valueForKey:@"hasRetractedParts"] boolValue]); } @catch (NSException *e) { d[@"hasRetractedParts"] = @NO; }
     @try { d[@"flags"] = ValueOrNull([message valueForKey:@"flags"]); } @catch (NSException *e) {}
 
-    // Deep diagnostics for balloon-render investigation: everything that could
-    // differ between an extension-sent (real) message and an injector-sent one.
-    // All values pass through JSONSafeValue - NSJSONSerialization throws on
-    // NSValue/NSData/IM* objects and that exception aborts the process.
-    @try {
-        id ftg = [message valueForKey:@"fileTransferGUIDs"];
-        d[@"fileTransferGUIDs"] = JSONSafeValue(ftg);
-    } @catch (NSException *e) {}
-    @try {
-        id parts = [message valueForKey:@"messageParts"];
-        if ([parts isKindOfClass:[NSArray class]]) {
-            NSMutableArray *partDescs = [NSMutableArray array];
-            for (id part in parts) {
-                NSMutableDictionary *pd = [NSMutableDictionary dictionary];
-                @try { pd[@"class"] = NSStringFromClass([part class]); } @catch (NSException *e) {}
-                @try { pd[@"messagePartIndex"] = JSONSafeValue([part valueForKey:@"messagePartIndex"]); } @catch (NSException *e) {}
-                @try { pd[@"messagePartRange"] = JSONSafeValue([part valueForKey:@"messagePartRange"]); } @catch (NSException *e) {}
-                @try { pd[@"transferGUID"] = JSONSafeValue([part valueForKey:@"transferGUID"]); } @catch (NSException *e) {}
-                @try { pd[@"hasLoadedTransferGUID"] = JSONSafeValue([part valueForKey:@"hasLoadedTransferGUID"]); } @catch (NSException *e) {}
-                @try { pd[@"description"] = JSONSafeValue([part description]); } @catch (NSException *e) {}
-                [partDescs addObject:pd];
-            }
-            d[@"messageParts"] = partDescs;
-        } else {
-            d[@"messageParts"] = JSONSafeValue(parts);
-        }
-    } @catch (NSException *e) {}
-    @try { d[@"associatedMessageRange"] = JSONSafeValue([message valueForKey:@"associatedMessageRange"]); } @catch (NSException *e) {}
-    @try {
-        id to = [message valueForKey:@"threadOriginator"];
-        d[@"threadOriginatorClass"] = to ? NSStringFromClass([to class]) : [NSNull null];
-        @try { d[@"threadOriginatorDescription"] = JSONSafeValue([to description]); } @catch (NSException *e) {}
-    } @catch (NSException *e) {}
-    @try { d[@"threadIdentifier"] = JSONSafeValue([message valueForKey:@"threadIdentifier"]); } @catch (NSException *e) {}
-    @try { d[@"useStandalone"] = @([[message valueForKey:@"useStandalone"] boolValue]); } @catch (NSException *e) {}
-    @try { d[@"shouldNotifyOnSend"] = @([[message valueForKey:@"shouldNotifyOnSend"] boolValue]); } @catch (NSException *e) {}
-    @try { d[@"senderName"] = JSONSafeValue([message valueForKey:@"senderName"]); } @catch (NSException *e) {}
-    @try { d[@"sortID"] = JSONSafeValue([message valueForKey:@"sortID"]); } @catch (NSException *e) {}
-    @try { d[@"needsRelay"] = @([[message valueForKey:@"needsRelay"] boolValue]); } @catch (NSException *e) {}
-    @try { d[@"isDelayed"] = @([[message valueForKey:@"isDelayed"] boolValue]); } @catch (NSException *e) {}
-    @try { d[@"balloonBundleIDDirect"] = JSONSafeValue([message valueForKey:@"balloonBundleID"]); } @catch (NSException *e) {}
-    @try { d[@"associatedBalloonBundleID"] = JSONSafeValue([message valueForKey:@"associatedBalloonBundleID"]); } @catch (NSException *e) {}
-    @try { d[@"sourceApplicationID"] = JSONSafeValue([message valueForKey:@"sourceApplicationID"]); } @catch (NSException *e) {}
-    @try { d[@"isTypingMessage"] = @([[message valueForKey:@"isTypingMessage"] boolValue]); } @catch (NSException *e) {}
-
     return d;
 }
 
