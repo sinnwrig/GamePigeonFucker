@@ -665,10 +665,23 @@ static NSDictionary *BuildMessageDict(id message)
 
 static void BroadcastToSubscribers(NSDictionary *eventDict)
 {
-    NSData *payload = [NSJSONSerialization dataWithJSONObject:eventDict options:0 error:nil];
+    NSData *payload = nil;
+    @try
+    {
+        payload = [NSJSONSerialization dataWithJSONObject:eventDict options:0 error:nil];
+    }
+    @catch (NSException *e)
+    {
+        payload = nil;
+    }
     if (!payload)
     {
-        return;
+        // Never let an unserializable value abort the process - drop a stub event.
+        payload = [NSJSONSerialization dataWithJSONObject:@{ @"ok": @YES, @"eventError": @"unserializable event" } options:0 error:nil];
+        if (!payload)
+        {
+            return;
+        }
     }
 
     NSMutableArray<NSNumber *> *deadFds = [NSMutableArray array];
