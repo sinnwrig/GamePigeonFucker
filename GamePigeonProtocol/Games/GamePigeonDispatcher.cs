@@ -192,7 +192,21 @@ public sealed class GamePigeonDispatcher
             DecodedQuery: GamePigeonQueryCodec.BuildQuery(fields),
             Fields: fields);
 
-        await service.SendGamePigeonMessageAsync(chatIdentifier, envelope, fallbackText);
+        // Moves go out as balloon updates associated to the game's invite message
+        string? associatedGuid = null;
+        if (state.MessageNumber is not (null or 1)
+            && state.SessionId is { } assocSessionId
+            && _sessions.TryGetValue(assocSessionId, out var assocTracker))
+        {
+            associatedGuid = assocTracker.RootMessageGuid;
+        }
+
+        if (associatedGuid is null && state.MessageNumber is not (null or 1))
+        {
+            Console.WriteLine($"[Dispatcher] warning: no root message guid for session {state.SessionId}; sending standalone (recipient may ignore it)");
+        }
+
+        await service.SendGamePigeonMessageAsync(chatIdentifier, envelope, fallbackText, associatedGuid);
 
         if (state.SessionId is { } sentSessionId)
         {
