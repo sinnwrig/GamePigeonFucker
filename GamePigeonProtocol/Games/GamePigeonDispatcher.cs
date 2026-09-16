@@ -24,6 +24,14 @@ public sealed class GamePigeonDispatcher
         public int LastNum;
         public bool LastWasFromMe;
         public int LastRespondedNum = -1;
+
+        /// <summary>
+        /// The iMessage GUID of the game's invite (num=1) message. Real clients send every
+        /// move as an associated message (type 2) pointing at the invite's balloon, which
+        /// is what makes iOS update the existing balloon in place instead of posting -- and
+        /// silently dropping -- a standalone duplicate of the session.
+        /// </summary>
+        public string? RootMessageGuid;
     }
 
     public GamePigeonDispatcher()
@@ -70,6 +78,11 @@ public sealed class GamePigeonDispatcher
                 _sessions[sessionId] = tracker;
             }
 
+            if ((state.IsOpenInvite || state.MessageNumber == 1) && !string.IsNullOrEmpty(message.Guid))
+            {
+                tracker.RootMessageGuid = message.Guid;
+            }
+
             if (state.MessageNumber is { } num && num > tracker.LastNum)
             {
                 tracker.LastNum = num;
@@ -99,7 +112,11 @@ public sealed class GamePigeonDispatcher
             return false;
         }
 
-        return !messageIsFromMe;
+        // An open invite is answerable by either side -- including us. When the local
+        // user sends an invite from their real client, the bot plays their slot for
+        // them. Own non-invite messages stay ineligible (they're our own moves, and
+        // answering them would loop).
+        return !messageIsFromMe || state.IsOpenInvite;
     }
 
     /// <summary>
@@ -124,7 +141,7 @@ public sealed class GamePigeonDispatcher
             return Task.FromResult(false);
         }
 
-        var nextState = handler.ApplyMove(state, playerUuid, move);
+        var nextState = handler.ApplyMove(state, playerUuid, playerAvatar, move);
         return SendMoveAsync(nextState, service, chatIdentifier, playerUuid, playerAvatar, fallbackText);
     }
 
@@ -142,6 +159,14 @@ public sealed class GamePigeonDispatcher
             return false;
         }
 
+        // The wire `sender` field is the author of *this* message -- us. States parsed from
+        // inbound messages carry the opponent's id in SessionSender, and ApplyMove
+        // implementations don't touch it, so stamp our own id here at the single send
+        // choke point. Sending the opponent's id makes the recipient's GamePigeon resolve
+        // the message as its own (isMine:/getPlayer:/fullPlayerId:), which is the root
+        // cause of balloons that open but never render game state.
+        state = state with { SessionSender = playerUuid };
+
         if (state.SessionId is { } sessionId && _sessions.TryGetValue(sessionId, out var tracker))
         {
             var expectedNum = tracker.LastNum + 1;
@@ -158,17 +183,22 @@ public sealed class GamePigeonDispatcher
             }
         }
 
-        var fields = parser.ToFields(state);
+        var fields = new Dictionary<string, string>(parser.ToFields(state));
+
+        // Real clients stamp every message with their own iOS version and a fresh random
+        // build token; never echo the opponent's (states parsed inbound carry theirs in
+        // RawFields, and some ToFields implementations copy them forward).
+        fields["ios"] = GamePigeonClientInfo.IosVersion;
+        fields["build"] = GamePigeonClientInfo.NewBuildToken();
+
         if (state.TurnMode == GameTurnMode.Lockstep
             && fields.GetValueOrDefault("player2") != playerUuid && !fields.ContainsKey("player1"))
         {
-            var claimed = new Dictionary<string, string>(fields) { ["player1"] = playerUuid };
+            fields["player1"] = playerUuid;
             if (!string.IsNullOrEmpty(playerAvatar))
             {
-                claimed["avatar1"] = playerAvatar;
+                fields["avatar1"] = playerAvatar;
             }
-
-            fields = claimed;
         }
 
         var caption = fallbackText ?? state.GameName ?? string.Empty;
