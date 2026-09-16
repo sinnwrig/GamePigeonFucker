@@ -134,18 +134,34 @@ static NSDictionary *HandleListClasses(NSDictionary *request)
     NSString *filter = request[@"filter"];
     NSString *lowerFilter = [filter isKindOfClass:[NSString class]] ? filter.lowercaseString : nil;
 
-    unsigned int count = 0;
-    Class *classes = objc_copyClassList(&count);
+    // objc_copyClassList REALIZES every registered class (including Swift ones),
+    // which SIGSEGVs in libswiftCore on macOS 26 (swift_getSingletonMetadata via
+    // StickerKit — crash report Messages-2026-09-16-120026.ips). Enumerate class
+    // names per loaded image instead: objc_copyClassNamesForImage reads the
+    // image's class list sections without realizing anything.
+    unsigned int imageCount = 0;
+    char **images = objc_copyImageNames(&imageCount);
     NSMutableArray *names = [NSMutableArray array];
-    for (unsigned int i = 0; i < count; i++)
+    for (unsigned int i = 0; i < imageCount; i++)
     {
-        NSString *name = NSStringFromClass(classes[i]);
-        if (lowerFilter.length == 0 || [name.lowercaseString containsString:lowerFilter])
+        unsigned int classCount = 0;
+        const char **classNames = objc_copyClassNamesForImage(images[i], &classCount);
+        if (!classNames)
         {
-            [names addObject:name];
+            continue;
         }
+
+        for (unsigned int j = 0; j < classCount; j++)
+        {
+            NSString *name = [NSString stringWithUTF8String:classNames[j]];
+            if (name && (lowerFilter.length == 0 || [name.lowercaseString containsString:lowerFilter]))
+            {
+                [names addObject:name];
+            }
+        }
+        free(classNames);
     }
-    free(classes);
+    free(images);
 
     return @{ @"ok": @YES, @"classes": names };
 }
