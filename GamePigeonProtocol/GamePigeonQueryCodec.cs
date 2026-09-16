@@ -35,10 +35,39 @@ internal static class GamePigeonQueryCodec
 
     public static string EncodeDataUrl(string plaintextQuery, string ver = "52")
     {
-        var escapedPlain = Uri.EscapeDataString(plaintextQuery);
+        var escapedPlain = EscapeQuery(plaintextQuery, escapeValueDelimiters: false);
         var shuffledBlob = GamePigeonCipher.Encrypt(escapedPlain);
-        var encodedBlob = Uri.EscapeDataString(shuffledBlob);
+        var encodedBlob = EscapeQuery(shuffledBlob, escapeValueDelimiters: true);
         return $"data:?ver={ver}&data={encodedBlob}";
+    }
+
+    private const string QueryLiterals = "-._~!$&'()*+,;=:@/?";
+
+    /// <summary>
+    /// Mirrors NSURLComponents' percent-encoding for iMessage balloon query strings
+    /// </summary>
+    private static string EscapeQuery(string value, bool escapeValueDelimiters)
+    {
+        var literals = escapeValueDelimiters
+            ? QueryLiterals.Replace("&", "").Replace("=", "")
+            : QueryLiterals;
+        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        var sb = new System.Text.StringBuilder(bytes.Length);
+        foreach (var b in bytes)
+        {
+            var c = (char)b;
+            if (b < 0x80 && (char.IsAsciiLetterOrDigit(c) || literals.Contains(c)))
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                sb.Append('%');
+                sb.Append(b.ToString("X2"));
+            }
+        }
+
+        return sb.ToString();
     }
 
     public static IReadOnlyDictionary<string, string> ParseQuery(string query)
