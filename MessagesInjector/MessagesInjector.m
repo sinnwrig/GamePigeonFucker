@@ -309,7 +309,7 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
                                                             text:attributedText
                                                   messageSubject:nil
                                                fileTransferGUIDs:nil
-                                                           flags:0x100005
+                                                           flags:messageFlags
                                                            error:nil
                                                             guid:nil
                                                          subject:nil
