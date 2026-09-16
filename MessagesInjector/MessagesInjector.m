@@ -250,16 +250,29 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
             return;
         }
 
-        id myHandle = nil;
-        NSString *senderIdentityID = request[@"senderIdentityID"];
-        if ([senderIdentityID isKindOfClass:[NSString class]] && senderIdentityID.length > 0) {
-            myHandle = [targetAccount performSelector:@selector(imHandleWithID:) withObject:senderIdentityID];
-        } else {
-            myHandle = nil;
-        }
-
         Class registrarClass = NSClassFromString(@"IMChatRegistry");
         id registrar = [registrarClass performSelector:@selector(sharedInstance)];
+
+        NSString *senderIdentityID = nil;
+
+        id existingChat = [registrar performSelector:@selector(chatForIMHandle:) withObject:handle];
+        if (existingChat && [existingChat respondsToSelector:@selector(lastAddressedHandleID)]) {
+            id addressed = [existingChat performSelector:@selector(lastAddressedHandleID)];
+            if ([addressed isKindOfClass:[NSString class]] && [addressed length] > 0) {
+                senderIdentityID = addressed;
+            }
+        }
+
+        if (!senderIdentityID) {
+            NSString *requested = request[@"senderIdentityID"];
+            if ([requested isKindOfClass:[NSString class]] && requested.length > 0) {
+                senderIdentityID = requested;
+            }
+        }
+
+        id myHandle = senderIdentityID
+            ? [targetAccount performSelector:@selector(imHandleWithID:) withObject:senderIdentityID]
+            : nil;
 
         id chat = nil;
         if (myHandle) {
@@ -284,13 +297,13 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
             return;
         }
 
-        if ([senderIdentityID isKindOfClass:[NSString class]] && senderIdentityID.length > 0) {
+        if (senderIdentityID) {
             [chat performSelector:@selector(setLastAddressedHandleID:) withObject:senderIdentityID];
         }
 
         NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
 
-        IMMessage *message = [[IMMessage alloc] initWithSender:nil
+        IMMessage *message = [[IMMessage alloc] initWithSender:myHandle
                                                             time:nil
                                                             text:attributedText
                                                   messageSubject:nil
@@ -309,7 +322,11 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
         }
 
         [chat sendMessage:message];
-        response = @{ @"ok": @YES, @"chatDescription": [chat description] ?: @"?" };
+        response = @{
+            @"ok": @YES,
+            @"chatDescription": [chat description] ?: @"?",
+            @"senderIdentityID": senderIdentityID ?: [NSNull null],
+        };
     });
     return response;
 }
