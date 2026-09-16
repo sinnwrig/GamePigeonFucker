@@ -39,10 +39,16 @@ internal static class GamePigeonEnvelopeCodec
 
         void AddEntry(string key, BplistUid value) => entries.Add((builder.AddString(key), value));
 
-        AddEntry("layoutClass", builder.AddString(LayoutClass));
+        // Entry order matches real GamePigeon payloads (ai, URL, ldtext, layoutClass,
+        // an, sessionIdentifier, userInfo, appid, liveLayoutInfo) — the receiving
+        // extension renders the live game view only for payloads that match the
+        // genuine client's archive layout (see FINDINGS.md 2.4).
+        AddEntry("ai", builder.AddData(envelope.Thumbnail is { Length: > 0 } t ? t : []));
+        AddEntry("URL", builder.AddUrl(GamePigeonQueryCodec.EncodeDataUrl(envelope.DecodedQuery)));
         AddEntry("ldtext", builder.AddString(envelope.GameName ?? string.Empty));
+        AddEntry("layoutClass", builder.AddString(LayoutClass));
+        AddEntry("an", builder.AddString(envelope.AppName ?? DefaultAppName));
         AddEntry("sessionIdentifier", builder.AddUuid(envelope.SessionId ?? Guid.NewGuid()));
-        AddEntry("liveLayoutInfo", builder.AddData(BuildLiveLayoutInfo()));
 
         if (envelope.UserInfo.Count > 0)
         {
@@ -52,16 +58,8 @@ internal static class GamePigeonEnvelopeCodec
             AddEntry("userInfo", builder.AddDictionary("NSDictionary", ["NSDictionary", "NSObject"], userInfoEntries));
         }
 
-        AddEntry("an", builder.AddString(envelope.AppName ?? DefaultAppName));
         AddEntry("appid", builder.AddNumber(envelope.AppId ?? DefaultAppId));
-
-        var dataUrl = GamePigeonQueryCodec.EncodeDataUrl(envelope.DecodedQuery);
-        AddEntry("URL", builder.AddUrl(dataUrl));
-
-        if (envelope.Thumbnail is { Length: > 0 } thumbnail)
-        {
-            AddEntry("ai", builder.AddData(thumbnail));
-        }
+        AddEntry("liveLayoutInfo", builder.AddData(BuildLiveLayoutInfo()));
 
         var rootUid = builder.AddDictionary("NSDictionary", ["NSDictionary", "NSObject"], entries);
         return builder.Build(rootUid);
