@@ -594,6 +594,32 @@ static id ValueOrNull(id value)
     return value ?: [NSNull null];
 }
 
+static id JSONSafeValue(id value)
+{
+    if (value == nil)
+    {
+        return [NSNull null];
+    }
+    if ([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSNull class]])
+    {
+        return value;
+    }
+    if ([value isKindOfClass:[NSArray class]] || [value isKindOfClass:[NSDictionary class]] || [value isKindOfClass:[NSSet class]])
+    {
+        NSMutableArray *safe = [NSMutableArray array];
+        for (id item in value)
+        {
+            [safe addObject:JSONSafeValue(item)];
+        }
+        return safe;
+    }
+    if ([value isKindOfClass:[NSData class]])
+    {
+        return [NSString stringWithFormat:@"<data %lu bytes>", (unsigned long)[value length]];
+    }
+    return [NSString stringWithFormat:@"%@", value];
+}
+
 static NSDictionary *BuildMessageDict(id message)
 {
     if (!message)
