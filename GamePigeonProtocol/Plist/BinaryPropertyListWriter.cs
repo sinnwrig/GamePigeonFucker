@@ -10,6 +10,7 @@ internal static class BinaryPropertyListWriter
     {
         var order = new List<object?>();
         var indexOf = new Dictionary<object, int>();
+        var stringIndex = new Dictionary<string, int>(); // Foundation dedupes equal strings
         int? nullIndex = null;
 
         int Visit(object? node)
@@ -26,6 +27,11 @@ internal static class BinaryPropertyListWriter
                 return nullIndex.Value;
             }
 
+            if (node is string s && stringIndex.TryGetValue(s, out var existingString))
+            {
+                return existingString;
+            }
+
             if (indexOf.TryGetValue(node, out var existing))
             {
                 return existing;
@@ -34,6 +40,10 @@ internal static class BinaryPropertyListWriter
             var idx = order.Count;
             order.Add(node);
             indexOf[node] = idx;
+            if (node is string s2)
+            {
+                stringIndex[s2] = idx;
+            }
 
             switch (node)
             {
@@ -46,9 +56,15 @@ internal static class BinaryPropertyListWriter
                     break;
 
                 case Dictionary<string, object?> dict:
-                    foreach (var (key, value) in dict)
+                    // Foundation emits a dictionary's keys before its values
+                    // (matches real GamePigeon payloads' object layout)
+                    foreach (var (key, _) in dict)
                     {
                         Visit(key);
+                    }
+
+                    foreach (var (_, value) in dict)
+                    {
                         Visit(value);
                     }
 
@@ -108,13 +124,11 @@ internal static class BinaryPropertyListWriter
                 }
 
             case long l:
-                buffer.Add(0x13);
-                WriteUIntBE(buffer, unchecked((ulong)l), 8);
+                WriteMinimalInt(buffer, l);
                 break;
 
             case int i:
-                buffer.Add(0x13);
-                WriteUIntBE(buffer, unchecked((ulong)(long)i), 8);
+                WriteMinimalInt(buffer, i);
                 break;
 
             case double d:
@@ -172,6 +186,32 @@ internal static class BinaryPropertyListWriter
 
             default:
                 throw new NotSupportedException($"Cannot serialize plist object of type {node.GetType()}");
+        }
+    }
+
+    private static void WriteMinimalInt(List<byte> buffer, long value)
+    {
+        // Foundation uses the minimal encoding width for integers (real
+        // GamePigeon payloads store $version=100000 as a 4-byte int).
+        if (value >= 0 && value <= 0xFF)
+        {
+            buffer.Add(0x10);
+            WriteUIntBE(buffer, (ulong)value, 1);
+        }
+        else if (value >= 0 && value <= 0xFFFF)
+        {
+            buffer.Add(0x11);
+            WriteUIntBE(buffer, (ulong)value, 2);
+        }
+        else if (value >= -0x80000000 && value <= 0xFFFFFFFF)
+        {
+            buffer.Add(0x12);
+            WriteUIntBE(buffer, unchecked((ulong)value), 4);
+        }
+        else
+        {
+            buffer.Add(0x13);
+            WriteUIntBE(buffer, unchecked((ulong)value), 8);
         }
     }
 
