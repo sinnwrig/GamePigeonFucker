@@ -7,5 +7,5 @@ namespace GamePigeon.Games;
 /// </summary>
 internal interface IGamePigeonMoveHandler<TState, in TMove> where TState : GamePigeonGameState
 {
-    TState ApplyMove(TState state, string playerUuid, TMove move);
+    TState ApplyMove(TState state, string playerUuid, string? playerAvatar, TMove move);
 }
