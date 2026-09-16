@@ -27,6 +27,7 @@ public class Gamer
     {
         PlayerUuid = playerUuid ?? DefaultUUID();
         PlayerAvatar = playerAvatar ?? DefaultAvatar();
+        GamePigeonClientInfo.IosVersion = GamePigeonFucker.Options.GetString("GamePigeonIosVersion", GamePigeonClientInfo.IosVersion)!;
         _dispatcher = new GamePigeonDispatcher();
 
         RegisterSolver(new ConnectFourSolver());
@@ -58,7 +59,7 @@ public class Gamer
             return;
         }
 
-        Console.WriteLine($"{hack} hax turned {onOff}");
+        // Console.WriteLine($"{hack} hax turned {onOff}");
     }
 
     private void RegisterSolver(IGameSolver solver)
@@ -85,8 +86,45 @@ public class Gamer
     public void HandleMessage(InboundMessage message, MessagingService service)
     {
         Console.WriteLine($"[Gamer] HandleMessage chat={message.ChatIdentifier} balloon={message.BalloonBundleId} payloadLen={message.PayloadData?.Length} isFromMe={message.IsFromMe} text={message.Text}");
-        _service = service;
+
+        if (_service is null)
+        {
+            _service = service;
+            _service.OnDeliveryStatus += delivery =>
+            {
+                if (delivery.IsDelivered)
+                {
+                    _deliveredGuids.Add(delivery.MessageGuid);
+                }
+            };
+        }
+
         var dispatched = _dispatcher.Dispatch(message);
         Console.WriteLine($"[Gamer] Dispatch returned {dispatched}");
+    }
+
+    private readonly HashSet<string> _deliveredGuids = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Wait until the given outgoing message is confirmed delivered. Answering our own
+    /// invite means sending a balloon *update* to it, and updates to a still-in-flight
+    /// invite fall back to RCS/SMS (losing the balloon entirely), so callers answering
+    /// an own invite must hold until its send settles. Returns false on timeout --
+    /// callers send anyway rather than never respond.
+    /// </summary>
+    public async Task<bool> WaitForDeliveryAsync(string guid, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (_deliveredGuids.Contains(guid))
+            {
+                return true;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+        }
+
+        return _deliveredGuids.Contains(guid);
     }
 }
