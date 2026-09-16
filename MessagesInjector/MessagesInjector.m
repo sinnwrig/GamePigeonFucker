@@ -304,6 +304,12 @@ static NSDictionary *HandleSendViaAccount(NSDictionary *request)
 
         NSAttributedString *attributedText = [[NSAttributedString alloc] initWithString:text ?: @""];
 
+        // NOTE: do NOT pre-set flag 0x1000 - IMCore sets it itself when it routes
+        // the message via iMessage; pre-setting it makes IMCore skip iMessage
+        // routing and the message falls back to RCS (verified 2026-09-15).
+        unsigned long long messageFlags = 0x100005;
+
+
         IMMessage *message = [[IMMessage alloc] initWithSender:myHandle
                                                             time:nil
                                                             text:attributedText
