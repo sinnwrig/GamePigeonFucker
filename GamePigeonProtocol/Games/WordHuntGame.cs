@@ -34,8 +34,6 @@ internal sealed class WordHuntGame : GamePigeonGameParserBase<WordHuntState>, IG
 {
     public override string GameKey => "hunt";
 
-    private const int MaxWireWords = 15;
-
     /// <summary>
     /// Slot ownership, inviter claims player 2, invitee claims player 1.
     /// </summary>
@@ -139,14 +137,14 @@ internal sealed class WordHuntGame : GamePigeonGameParserBase<WordHuntState>, IG
         {
             fields.SetIfNotNull("score1", state.Score1);
             fields.SetIfNotNull("words1", state.Words1);
-            fields["words_list1"] = string.Join('|', state.WordsList1.Take(MaxWireWords));
+            fields["words_list1"] = string.Join('|', state.WordsList1);
         }
 
         if (state.Score2 is not null)
         {
             fields.SetIfNotNull("score2", state.Score2);
             fields.SetIfNotNull("words2", state.Words2);
-            fields["words_list2"] = string.Join('|', state.WordsList2.Take(MaxWireWords));
+            fields["words_list2"] = string.Join('|', state.WordsList2);
         }
 
         fields["game"] = GameKey;
